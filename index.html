@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="description" content="우성 품질관리 플랫폼 — QR 기반 차량입고·사일로·생산·품질·VOC 통합 추적 시스템">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="우성품질">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>우성 품질관리 플랫폼 (온라인 초안)</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/app-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/app-icon.svg">
+
+  <!-- 구글 폰트 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- 3D 렌더러(three.js) 경로 — 사료 외관 시뮬레이터가 화면을 열 때만 불러온다 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/online_config.js"></script>
+  <script src="js/online_bridge.js"></script>
+  <script src="js/online_auth.js"></script>
+  <script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  } }
+  </script>
+
+  <!-- 외부 라이브러리 (CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="js/chart_common.js?v=20260814-auditview"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- 스타일 -->
+  <link rel="stylesheet" href="css/style.css?v=20260814-pflow2">
+  <link rel="stylesheet" href="css/lab.css?v=20260814-auditview">
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ── 사이드바 ── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">
+          <!-- 우성 CI 심볼 (www.wsgroup.co.kr 공식 로고) -->
+          <svg viewBox="0 0 37.36 20.02" width="100%" height="100%" fill="#E4002B" aria-label="우성" style="display:block">
+            <polygon points="7.426,20.02 0,0 5.885,0 9.08,10.119 9.164,10.119 12.667,0 16.744,0 20.293,10.119 20.375,10.119 23.515,0 29.366,0 22.058,20.02 18.926,20.02 14.754,8.457 14.67,8.457 10.627,20.02"/>
+            <path d="M37.36,4.844c0,0.67-0.142,1.27-0.425,1.803c-0.285,0.529-0.678,0.943-1.189,1.244 c-0.51,0.3-1.085,0.449-1.728,0.449c-0.634,0-1.203-0.153-1.708-0.458c-0.506-0.303-0.901-0.72-1.187-1.25 c-0.283-0.531-0.427-1.127-0.427-1.788c0-0.542,0.091-1.032,0.273-1.469c0.182-0.436,0.43-0.808,0.742-1.111 c0.316-0.305,0.67-0.534,1.069-0.692c0.399-0.159,0.812-0.238,1.237-0.238c0.439,0,0.861,0.083,1.269,0.248 c0.405,0.164,0.763,0.397,1.073,0.695c0.307,0.302,0.552,0.671,0.731,1.112C37.27,3.832,37.36,4.316,37.36,4.844"/>
+            <path d="M37.36,15.188c0,0.67-0.142,1.269-0.425,1.803c-0.285,0.528-0.678,0.943-1.189,1.244 c-0.51,0.298-1.085,0.45-1.728,0.45c-0.634,0-1.203-0.153-1.708-0.458c-0.506-0.304-0.901-0.722-1.187-1.251 c-0.283-0.53-0.427-1.127-0.427-1.787c0-0.542,0.091-1.032,0.273-1.468c0.182-0.438,0.43-0.808,0.742-1.112 c0.316-0.304,0.67-0.533,1.069-0.693c0.399-0.156,0.812-0.236,1.237-0.236c0.439,0,0.861,0.083,1.269,0.248 c0.405,0.165,0.763,0.398,1.073,0.696c0.307,0.301,0.552,0.67,0.731,1.113C37.27,14.175,37.36,14.66,37.36,15.188"/>
+          </svg>
+        </div>
+        <div>
+          <div class="logo-text">우성사료</div>
+          <div class="logo-sub">우성 품질관리 플랫폼</div>
+        </div>
+      </div>
+
+      <!-- 공장 필터 -->
+      <div class="factory-filter" id="factory-filter">
+        <div class="factory-label">공장 선택</div>
+        <div class="factory-tabs">
+          <div class="factory-tab active" data-factory="ALL" onclick="App.setFactory('ALL')">전체</div>
+          <div class="factory-tab" data-factory="AS" onclick="App.setFactory('AS')">아산</div>
+          <div class="factory-tab" data-factory="GS" onclick="App.setFactory('GS')">경산</div>
+          <div class="factory-tab" data-factory="NS" onclick="App.setFactory('NS')">논산</div>
+          <div class="factory-tab" data-factory="HQ" onclick="App.setFactory('HQ')">본사</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group-label" data-workspace="qr">메인</div>
+        <div class="nav-item active" data-workspace="qr" data-page="dashboard" onclick="App.navigate('dashboard')">
+          <span class="nav-icon"></span>
+          QR 입고배정 현황
+        </div>
+
+        <div class="nav-group-label" data-workspace="qr">입고 · 재고 QR</div>
+        <div class="nav-item" data-workspace="qr" data-page="supplierInbound" onclick="App.navigate('supplierInbound')">
+          <span class="nav-icon"></span>
+          협력사 입고예정
+          <span class="nav-badge hidden" id="badge-supplier-inbound">0</span>
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="receiving" onclick="App.navigate('receiving')">
+          <span class="nav-icon"></span>
+          입고 관리
+          <span class="nav-badge hidden" id="badge-receiving">0</span>
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="silo" onclick="App.navigate('silo')">
+          <span class="nav-icon"></span>
+          사일로 관리
+          <span class="nav-badge hidden" id="badge-silo">0</span>
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="inventory" onclick="App.navigate('inventory')">
+          <span class="nav-icon"></span>
+          톤백·지대 재고
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="longStock" onclick="App.navigate('longStock')">
+          <span class="nav-icon"></span>
+          장기재고 알람
+          <span class="nav-badge hidden" id="badge-longstock">0</span>
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="outbound" onclick="App.navigate('outbound')">
+          <span class="nav-icon"></span>
+          출고 처리
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="productStock" onclick="App.navigate('productStock')">
+          <span class="nav-icon"></span>
+          제품 재고
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="subMaterial" onclick="App.navigate('subMaterial')">
+          <span class="nav-icon"></span>
+          부자재 재고
+          <span class="nav-badge hidden" id="badge-submaterial">0</span>
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="scan" onclick="App.navigate('scan')">
+          <span class="nav-icon"></span>
+          QR 스캔
+        </div>
+        <div class="nav-item" data-workspace="qr" data-page="plateScan" onclick="App.navigate('plateScan')">
+          <span class="nav-icon"></span>
+          번호 인식(카메라)
+        </div>
+
+        <div class="nav-group-label" data-workspace="quality">품질 · R&D</div>
+        <div class="nav-item" data-workspace="quality" data-page="quality" onclick="App.navigate('quality')">
+          <span class="nav-icon"></span>
+          품질 게이트
+          <span class="nav-badge hidden" id="badge-quality">0</span>
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="defectStats" onclick="App.navigate('defectStats')">
+          <span class="nav-icon"></span>
+          부적합 통계
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="qmLot" onclick="App.navigate('qmLot')">
+          <span class="nav-icon"></span>
+          품질검사 로트
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="qmStock" onclick="App.navigate('qmStock')">
+          <span class="nav-icon"></span>
+          품질재고 · 처분
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="qmSetup" onclick="App.navigate('qmSetup')">
+          <span class="nav-icon"></span>
+          검사설정(QM뷰)
+        </div>
+
+        <div class="nav-group-label" data-workspace="formula">배합비 · 생산</div>
+        <div class="nav-item" data-workspace="formula" data-page="formula" onclick="App.navigate('formula')">
+          <span class="nav-icon"></span>
+          배합비 관리
+        </div>
+        <div class="nav-item" data-workspace="formula" data-page="production" onclick="App.navigate('production')">
+          <span class="nav-icon"></span>
+          투입지시
+          <span class="nav-badge hidden" id="badge-production">0</span>
+        </div>
+        <div class="nav-item" data-workspace="formula" data-page="batch" onclick="App.navigate('batch')">
+          <span class="nav-icon"></span>
+          배합·생산LOT
+        </div>
+        <div class="nav-item" data-workspace="formula" data-page="feedProduction" onclick="App.navigate('feedProduction')">
+          <span class="nav-icon"></span>
+          배합사료 생산실적
+        </div>
+        <div class="nav-item" data-workspace="formula" data-page="formulaTrend" onclick="App.navigate('formulaTrend')">
+          <span class="nav-icon"></span>
+          배합비 추이분석
+        </div>
+        <div class="nav-item" data-workspace="formula" data-page="feedAppearance" onclick="App.navigate('feedAppearance')">
+          <span class="nav-icon"></span>
+          외관·흐름성 시뮬레이터
+        </div>
+
+        <div class="nav-group-label" data-workspace="trace">추적 · 클레임</div>
+        <div class="nav-item" data-workspace="trace" data-page="history" onclick="App.navigate('history')">
+          <span class="nav-icon"></span>
+          원료 추적
+        </div>
+        <div class="nav-item" data-workspace="trace" data-page="voc" onclick="App.navigate('voc')">
+          <span class="nav-icon"></span>
+          VOC 역추적
+          <span class="nav-badge hidden" id="badge-voc">0</span>
+        </div>
+        <div class="nav-item" data-workspace="trace" data-page="vocDashboard" onclick="App.navigate('vocDashboard')">
+          <span class="nav-icon"></span>
+          VOC 대시보드
+        </div>
+
+        <div class="nav-group-label" data-workspace="admin">관리</div>
+        <div class="nav-item" data-workspace="admin" data-page="codes" onclick="App.navigate('codes')">
+          <span class="nav-icon"></span>
+          코드 관리
+        </div>
+        <div class="nav-item" data-workspace="admin" data-page="supplier" onclick="App.navigate('supplier')">
+          <span class="nav-icon"></span>
+          협력사 관리
+        </div>
+        <div class="nav-item" data-workspace="admin" data-page="auditLog" onclick="App.navigate('auditLog')">
+          <span class="nav-icon"></span>
+          수정 이력 조회
+        </div>
+
+        <div class="nav-group-label" data-workspace="smart">스마트제조</div>
+        <div class="nav-item" data-workspace="smart" data-page="ccp" onclick="App.navigate('ccp')">
+          <span class="nav-icon"></span>
+          스마트 HACCP
+          <span class="nav-badge hidden" id="badge-ccp">0</span>
+        </div>
+        <div class="nav-item" data-workspace="smart" data-page="equipment" onclick="App.navigate('equipment')">
+          <span class="nav-icon"></span>
+          설비관리
+          <span class="nav-badge hidden" id="badge-equipment">0</span>
+        </div>
+        <div class="nav-item" data-workspace="smart" data-page="processFlow" onclick="App.navigate('processFlow')">
+          <span class="nav-icon"></span>
+          제조공정도
+        </div>
+        <div class="nav-item" data-workspace="smart" data-page="issue" onclick="App.navigate('issue')">
+          <span class="nav-icon"></span>
+          공정 이슈
+          <span class="nav-badge hidden" id="badge-issue">0</span>
+        </div>
+
+        <div class="nav-group-label" data-workspace="quality">품질 분석관리</div>
+        <div class="nav-item" data-workspace="quality" data-page="workmap" onclick="App.navigate('workmap')">
+          <span class="nav-icon"></span>
+          품질 업무맵
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="labDashboard" onclick="App.navigate('labDashboard')">
+          <span class="nav-icon"></span>
+          품질 대시보드
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="labReceive" onclick="App.navigate('labReceive')">
+          <span class="nav-icon"></span>
+          시료 접수
+          <span class="nav-badge hidden" id="badge-lab-receive">0</span>
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="input" onclick="App.navigate('input')">
+          <span class="nav-icon"></span>
+          분석 결과입력
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="raw" onclick="App.navigate('raw')">
+          <span class="nav-icon"></span>
+          원료 분석대장
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="prod" onclick="App.navigate('prod')">
+          <span class="nav-icon"></span>
+          제품 분석대장
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="items" onclick="App.navigate('items')">
+          <span class="nav-icon"></span>
+          분석항목 관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="spec" onclick="App.navigate('spec')">
+          <span class="nav-icon"></span>
+          성분규격 관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="matrix" onclick="App.navigate('matrix')">
+          <span class="nav-icon"></span>
+          원료 매트릭스
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="specSheet" onclick="App.navigate('specSheet')">
+          <span class="nav-icon"></span>
+          원료 규격서
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="feedCert" onclick="App.navigate('feedCert')">
+          <span class="nav-icon"></span>
+          사료성분등록증
+        </div>
+        <div class="nav-group-label" data-workspace="quality">품질관리</div>
+        <div class="nav-item" data-workspace="quality" data-page="speciesLivestock" onclick="App.navigate('speciesLivestock')">
+          <span class="nav-icon"></span>
+          양축 품질관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="speciesAqua" onclick="App.navigate('speciesAqua')">
+          <span class="nav-icon"></span>
+          양어 품질관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="speciesPet" onclick="App.navigate('speciesPet')">
+          <span class="nav-icon"></span>
+          반려 품질관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="weather" onclick="App.navigate('weather')">
+          <span class="nav-icon"></span>
+          날씨·습도 기록
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="pestControl" onclick="App.navigate('pestControl')">
+          <span class="nav-icon"></span>
+          구서관리
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="officeAudit" onclick="App.navigate('officeAudit')">
+          <span class="nav-icon"></span>
+          영업소 심사
+        </div>
+        <div class="nav-item" data-workspace="quality" data-page="meeting" onclick="App.navigate('meeting')">
+          <span class="nav-icon"></span>
+          품질회의·안건추적
+          <span class="nav-badge hidden" id="badge-meeting">0</span>
+        </div>
+        <div class="nav-group-label" data-workspace="haccp">HACCP</div>
+        <div class="nav-item" data-workspace="haccp" data-page="haccpDocs" onclick="App.navigate('haccpDocs')">
+          <span class="nav-icon"></span>
+          기준서·문서
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="haccpHA" onclick="App.navigate('haccpHA')">
+          <span class="nav-icon"></span>
+          위해요소분석
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="newMat" onclick="App.navigate('newMat')">
+          <span class="nav-icon"></span>
+          신원료 위해평가
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="validation" onclick="App.navigate('validation')">
+          <span class="nav-icon"></span>
+          유효성 평가
+        </div>
+
+        <div class="nav-group-label" data-workspace="haccp">전자 일지</div>
+        <div class="nav-item" data-workspace="haccp" data-page="journal" onclick="App.navigate('journal')">
+          <span class="nav-icon"></span>
+          전자 일지 작성
+          <span class="nav-badge hidden" id="badge-journal">0</span>
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="journalBoard" onclick="App.navigate('journalBoard')">
+          <span class="nav-icon"></span>
+          일지 현황·결재함
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="journalSetup" onclick="App.navigate('journalSetup')">
+          <span class="nav-icon"></span>
+          일지 양식 설정
+        </div>
+
+        <div class="nav-group-label" data-workspace="haccp">선행요건 · 심사</div>
+        <div class="nav-item" data-workspace="haccp" data-page="calibration" onclick="App.navigate('calibration')">
+          <span class="nav-icon"></span>
+          계측기 검교정
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="auditFinding" onclick="App.navigate('auditFinding')">
+          <span class="nav-icon"></span>
+          심사 지적사항
+          <span class="nav-badge hidden" id="badge-audit">0</span>
+        </div>
+
+        <div class="nav-group-label" data-workspace="haccp">SQF</div>
+        <div class="nav-item" data-workspace="haccp" data-page="sqfDocs" onclick="App.navigate('sqfDocs')">
+          <span class="nav-icon"></span>
+          SQF 기준서·문서
+        </div>
+        <div class="nav-item" data-workspace="haccp" data-page="sqfCA" onclick="App.navigate('sqfCA')">
+          <span class="nav-icon"></span>
+          SQF 시정조치
+        </div>
+
+        <div class="nav-group-label" data-workspace="haccp">법령</div>
+        <div class="nav-item" data-workspace="haccp" data-page="lawMonitor" onclick="App.navigate('lawMonitor')">
+          <span class="nav-icon"></span>
+          법령 모니터
+        </div>
+<div class="nav-group-label" data-workspace="rnd">제품개발</div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndPlan" onclick="App.navigate('rndPlan')">
+          <span class="nav-icon"></span>
+          제품기획
+        </div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndProject" onclick="App.navigate('rndProject')">
+          <span class="nav-icon"></span>
+          개발과제관리
+        </div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndSpec" onclick="App.navigate('rndSpec')">
+          <span class="nav-icon"></span>
+          제품규격
+        </div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndSchedule" onclick="App.navigate('rndSchedule')">
+          <span class="nav-icon"></span>
+          개발일정
+        </div>
+
+        <div class="nav-group-label" data-workspace="rnd">연구관리</div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndNote" onclick="App.navigate('rndNote')">
+          <span class="nav-icon"></span>
+          연구기록관리
+        </div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndKnowledge" onclick="App.navigate('rndKnowledge')">
+          <span class="nav-icon"></span>
+          지식자산관리
+        </div>
+        <div class="nav-item" data-workspace="rnd" data-page="rndCollab" onclick="App.navigate('rndCollab')">
+          <span class="nav-icon"></span>
+          협업관리
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="nav-item" onclick="showSettings()">
+          <span class="nav-icon"></span>
+          설정
+        </div>
+        <div class="sidebar-clock" id="sidebar-clock">
+          <div class="sidebar-clock-date" id="clock-date">-</div>
+          <div class="sidebar-clock-time" id="clock-time">--:--:--</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 모바일 오버레이 -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- ── 메인 콘텐츠 ── -->
+    <div class="main-content">
+      <!-- 탑바 -->
+      <header class="topbar">
+        <button class="sidebar-toggle" onclick="App.toggleSidebar()"></button>
+        <div class="topbar-heading">
+          <div class="topbar-title" id="topbar-title">QR 입고배정 현황</div>
+          <div class="topbar-subtitle" id="topbar-subtitle">실시간 입고 · 스캔 · 사일로 현황</div>
+        </div>
+        <div class="topbar-actions">
+          <div class="workspace-switcher" id="workspace-switcher">
+            <button class="workspace-tab active" data-workspace="qr" onclick="App.switchWorkspace('qr')">입고·재고 QR</button>
+            <button class="workspace-tab" data-workspace="quality" onclick="App.switchWorkspace('quality')">품질·실험실</button>
+            <button class="workspace-tab" data-workspace="formula" onclick="App.switchWorkspace('formula')">배합비·생산</button>
+            <button class="workspace-tab" data-workspace="trace" onclick="App.switchWorkspace('trace')">추적·클레임</button>
+            <button class="workspace-tab" data-workspace="admin" onclick="App.switchWorkspace('admin')">관리</button>
+            <button class="workspace-tab" data-workspace="smart" onclick="App.switchWorkspace('smart')">스마트제조</button>
+            <button class="workspace-tab" data-workspace="haccp" onclick="App.switchWorkspace('haccp')">인증관리</button>
+            <button class="workspace-tab" data-workspace="rnd" onclick="App.switchWorkspace('rnd')">연구관리</button>
+          </div>
+          <div class="factory-badge" id="topbar-factory">전체 공장</div>
+          <div class="weather-badge hidden" id="topbar-weather" title="날씨·습도"></div>
+          <button class="btn btn-ghost btn-sm no-print" id="print-page-btn" onclick="App.printPage()" title="현재 화면 인쇄 / PDF 저장">인쇄</button>
+          <button class="btn btn-ghost btn-sm hidden" id="pwa-install-btn" onclick="PWAInstall.prompt()">앱 설치</button>
+          <button class="btn btn-outline-primary btn-sm" data-workspace-action="qr" onclick="App.navigate('scan')">
+            QR 스캔
+          </button>
+          <button class="btn btn-primary btn-sm" data-workspace-action="qr" onclick="App.navigate('receiving');setTimeout(()=>ReceivingPage.openAddModal(),200)">
+            ＋ 입고
+          </button>
+        </div>
+      </header>
+
+      <!-- 페이지 콘텐츠 -->
+      <main class="page-content" id="page-content">
+        <div class="empty-state">
+          <div class="spinner"></div>
+          <div class="text-muted mt-12">시스템 로딩 중...</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ── 토스트 컨테이너 ── -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ── 설정 모달 ── -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">시스템 설정</div>
+        <button class="modal-close" onclick="document.getElementById('settings-modal').classList.remove('open')">✕</button>
+      </div>
+      <div id="settings-body"></div>
+    </div>
+  </div>
+
+  <!-- ── 마스터 데이터: file:// 환경에서도 로드되도록 JS 백업 사용 ── -->
+  <script src="data/rawMaterials.js"></script>
+  <script src="data/productCodes.js"></script>
+  <script src="data/supplierMaster.js"></script>
+  <!-- 실험실 통합 데이터 -->
+  <script src="data/labItems.js?v=20260814-auditview"></script>
+  <script src="data/productCategories.js?v=20260814-auditview"></script>
+  <script src="data/petSpecs.js?v=20260814-auditview"></script>
+  <script src="data/regSpecs.js?v=20260814-auditview"></script>
+  <script src="data/rawSpecs.js?v=20260814-auditview"></script>
+  <script src="data/rawSpecSheets.js?v=20260814-auditview"></script>
+  <script src="data/labRawImport.js?v=20260814-auditview"></script>
+  <script src="data/labSeed.js?v=20260814-auditview"></script>
+  <script src="data/pestControlSeed.js?v=20260814-auditview"></script>
+  <script src="data/vocImport.js?v=20260814-auditview"></script>
+
+  <!-- ── JS 모듈 로드 순서 중요 ── -->
+  <script src="js/audit_log.js?v=20260825-lawwatch"></script>
+  <script src="js/db.js?v=20260814-auditview"></script>
+  <script src="js/qr.js?v=20260814-auditview"></script>
+  <script src="js/disease_alert.js?v=20260825-lawwatch"></script>
+  <script src="js/haccp_edu_alert.js?v=20260814-auditview"></script>
+  <script src="js/feed_production.js?v=20260814-auditview"></script>
+  <script src="js/dashboard.js?v=20260814-auditview"></script>
+  <script src="js/supplier_inbound.js?v=20260814-auditview"></script>
+  <script src="js/receiving.js?v=20260814-auditview"></script>
+  <script src="js/quality.js?v=20260814-auditview"></script>
+  <script src="js/silo.js?v=20260814-auditview"></script>
+  <script src="js/inventory.js?v=20260814-auditview"></script>
+  <script src="js/long_stock.js?v=20261019-stockmerge"></script>
+  <script src="js/quality_rd.js?v=20260814-auditview"></script>
+  <script src="js/formula_sync.js?v=20260814-fsync"></script>
+  <script src="js/formula.js?v=20260814-fsync"></script>
+  <script src="js/qm_db.js?v=20260814-qm"></script>
+  <script src="js/qm_lot.js?v=20260814-qm"></script>
+  <script src="js/feed_flow.js?v=20260814-flow"></script>
+  <script src="js/law_monitor.js?v=20261016-law"></script>
+  <script src="js/feed_appearance_3d.js?v=20261012-3d"></script>
+  <script src="js/feed_appearance.js?v=20261012-3d"></script>
+  <script src="js/rnd_db.js?v=20260814-rnd"></script>
+  <script src="js/rnd_common.js?v=20260814-rnd"></script>
+  <script src="js/rnd_product.js?v=20260814-rnd"></script>
+  <script src="js/rnd_research.js?v=20260814-rnd"></script>
+  <script src="js/production.js?v=20261019-stocklevel"></script>
+  <script src="js/batch.js?v=20261019-stocklevel"></script>
+  <script src="js/outbound.js?v=20260814-auditview"></script>
+  <script src="js/history.js?v=20261019-tracesearch"></script>
+  <script src="js/voc.js?v=20260814-auditview"></script>
+  <script src="js/voc_dashboard.js?v=20260814-auditview"></script>
+  <script src="js/supplier.js?v=20261016-selfcheck"></script>
+  <script src="js/code_master.js?v=20260814-auditview"></script>
+  <script src="js/pwa_install.js?v=20260814-auditview"></script>
+  <script src="js/ai_engine.js?v=20260814-auditview"></script>
+  <script src="js/process_flow_data.js?v=20260814-pflow2"></script>
+  <script src="js/process_flow.js?v=20260814-pflow2"></script>
+  <script src="js/haccp.js?v=20260814-auditview"></script>
+  <script src="js/equipment.js?v=20260814-auditview"></script>
+  <script src="js/submaterial.js?v=20260814-auditview"></script>
+  <script src="js/issue.js?v=20260814-auditview"></script>
+  <script src="js/productstock.js?v=20261019-stocklevel"></script>
+  <script src="js/stock_level.js?v=20261019-stocklevel"></script>
+  <script src="js/plate_scan.js?v=20260814-auditview"></script>
+  <!-- 품질 분석관리(통합) 모듈 -->
+  <script src="js/xlsx_export.js?v=20260814-auditview"></script>
+  <script src="js/docx_export.js?v=20260814-auditview"></script>
+  <script src="js/lab_common.js?v=20260814-auditview"></script>
+  <script src="js/filestore.js?v=20260814-auditview"></script>
+  <script src="js/photostore.js?v=20260814-auditview"></script>
+  <script src="js/lab_db.js?v=20260825-lawsplit"></script>
+  <script src="js/winboard.js?v=20260814-auditview"></script>
+  <script src="js/lab_workmap.js?v=20260814-auditview"></script>
+  <script src="js/lab_matrix.js?v=20260814-auditview"></script>
+  <script src="js/lab_dashboard.js?v=20260819-dashpref"></script>
+  <script src="js/lab_formula_trend.js?v=20260814-auditview"></script>
+  <script src="js/lab_xlsx_import.js?v=20260814-auditview"></script>
+  <script src="js/lab_receive.js?v=20260814-auditview"></script>
+  <script src="js/lab_input.js?v=20260814-auditview"></script>
+  <script src="js/lab_analysis.js?v=20260814-auditview"></script>
+  <script src="js/lab_coa.js?v=20260814-auditview"></script>
+  <script src="js/feed_cert.js?v=20260814-auditview"></script>
+  <script src="js/audit_view.js?v=20260814-auditview"></script>
+  <script src="js/lab_spec.js?v=20260814-auditview"></script>
+  <script src="js/lab_specsheet.js?v=20260814-auditview"></script>
+  <script src="js/lab_items.js?v=20260814-auditview"></script>
+  <script src="js/lab_haccp.js?v=20260814-auditview"></script>
+  <script src="js/lab_validation.js?v=20260814-auditview"></script>
+  <script src="js/lab_sqf.js?v=20260814-auditview"></script>
+  <!-- 축종별 전용 품질관리 (양축 옥수수·입자도 / 양어 / 반려) -->
+  <script src="js/lab_species_db.js?v=20260825-lawwatch"></script>
+  <script src="js/lab_species_report.js?v=20260814-auditview"></script>
+  <script src="js/lab_corn.js?v=20260814-auditview"></script>
+  <script src="js/lab_psa.js?v=20260814-auditview"></script>
+  <script src="js/lab_aqua.js?v=20260814-auditview"></script>
+  <script src="js/lab_pet.js?v=20260814-auditview"></script>
+  <!-- 구서(방서)관리 -->
+  <script src="js/pest_db.js?v=20260814-auditview"></script>
+  <script src="js/pest_pdf_parse.js?v=20260814-auditview"></script>
+  <script src="js/pest_control.js?v=20260814-auditview"></script>
+  <!-- 영업소 심사 체크리스트 -->
+  <script src="js/office_audit_db.js?v=20260814-auditview"></script>
+  <script src="js/office_audit.js?v=20260814-auditview"></script>
+  <script src="js/calib_db.js?v=20260814-auditview"></script>
+  <script src="js/calibration.js?v=20260814-auditview"></script>
+  <script src="js/expiry_alert.js?v=20261019-stockmerge"></script>
+  <script src="js/defect_stats.js?v=20260814-auditview"></script>
+  <script src="js/audit_finding_db.js?v=20261016-selfcheck"></script>
+  <script src="js/self_check.js?v=20261016-selfcheck"></script>
+  <script src="js/audit_finding.js?v=20261016-selfcheck"></script>
+  <!-- 품질회의 · 안건 추적 -->
+  <script src="js/meeting_db.js?v=20260814-auditview"></script>
+  <script src="js/meeting.js?v=20260814-auditview"></script>
+  <!-- 전자 일지(기록일지) 프레임 -->
+  <script src="js/journal_db.js?v=20260814-auditview"></script>
+  <script src="js/journal.js?v=20260814-auditview"></script>
+  <script src="js/journal_setup.js?v=20260814-auditview"></script>
+  <script src="js/journal_board.js?v=20260814-auditview"></script>
+  <!-- 날씨·습도 자동기록 -->
+  <script src="js/weather.js?v=20260814-auditview"></script>
+  <!-- 전역 알림 센터 -->
+  <script src="js/notifications.js?v=20261019-stocklevel"></script>
+
+  <script src="js/sync.js?v=20261019-stocklevel"></script>
+  <script src="js/app.js?v=20261019-stockmerge"></script>
+  <!-- 로그인 / 회원가입 / 마스터 승인 -->
+  <script src="js/auth.js?v=20260814-auditview"></script>
+
+  <!-- 설정 기능 -->
+  <script>
+    function showSettings() {
+      const settings = DB.getSettings();
+      document.getElementById('settings-body').innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="form-group">
+            <label class="form-label">회사명</label>
+            <input type="text" class="form-input" id="s-company" value="${settings.companyName}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">창고명</label>
+            <input type="text" class="form-input" id="s-warehouse" value="${settings.warehouseName}">
+          </div>
+          <hr class="divider">
+          <div style="font-size:13px;font-weight:600;color:var(--text-secondary)">계근 허용 편차</div>
+          <div class="form-grid form-grid-2" style="gap:12px">
+            <div class="form-group">
+              <label class="form-label">주의 기준 (%)</label>
+              <input type="number" class="form-input" id="s-warn" value="${settings.weightWarnPct}" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">이상 기준 (%)</label>
+              <input type="number" class="form-input" id="s-alert" value="${settings.weightAlertPct}" step="0.1" min="0">
+            </div>
+          </div>
+          <hr class="divider">
+          <div style="font-size:13px;font-weight:600;color:var(--text-secondary)">데이터 관리</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="exportData()">데이터 내보내기</button>
+            <button class="btn btn-ghost btn-sm" onclick="importDataClick()">데이터 불러오기</button>
+            <button class="btn btn-danger btn-sm" onclick="if(confirm('모든 데이터를 초기화하시겠습니까?'))clearData()">데이터 초기화</button>
+          </div>
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="document.getElementById('settings-modal').classList.remove('open')">취소</button>
+          <button class="btn btn-primary" onclick="saveSettings()">저장</button>
+        </div>
+      `;
+      document.getElementById('settings-modal').classList.add('open');
+    }
+
+    function saveSettings() {
+      DB.saveSettings({
+        companyName:    document.getElementById('s-company').value,
+        warehouseName:  document.getElementById('s-warehouse').value,
+        weightWarnPct:  parseFloat(document.getElementById('s-warn').value) || 0.5,
+        weightAlertPct: parseFloat(document.getElementById('s-alert').value) || 2.0,
+      });
+      document.getElementById('settings-modal').classList.remove('open');
+      App.toast('설정이 저장되었습니다', 'success');
+    }
+
+    function exportData() {
+      const data = {
+        exportedAt: new Date().toISOString(),
+        receivings: DB.getReceivings(), weighings: DB.getWeighings(),
+        inspections: DB.getInspections(), inventory: DB.getInventory(),
+        outbounds: DB.getOutbounds(), history: DB.getHistory(),
+        silos: DB.getSilos(), suppliers: DB.getSuppliers(),
+        productionOrders: DB.getProductionOrders(), batches: DB.getBatches(),
+        productLots: DB.getProductLots(), vocs: DB.getVOCs(),
+        settings: DB.getSettings()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `woosung_qr_${new Date().toISOString().split('T')[0]}.json`;
+      a.click(); URL.revokeObjectURL(url);
+      App.toast('데이터 내보내기 완료', 'success');
+    }
+
+    function importDataClick() { document.getElementById('import-file').click(); }
+
+    function importData(input) {
+      if (!input.files?.[0]) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          const keys = { receivings:'rm_receiving', weighings:'rm_weighing', inspections:'rm_quality', inventory:'rm_inventory', outbounds:'rm_outbound', history:'rm_history', silos:'rm_silos', suppliers:'rm_suppliers', productionOrders:'rm_production_orders', batches:'rm_mixing_batches', productLots:'rm_product_lots', vocs:'rm_voc' };
+          Object.entries(keys).forEach(([k, v]) => { if (data[k]) localStorage.setItem(v, JSON.stringify(data[k])); });
+          App.toast('데이터 불러오기 완료. 새로고침합니다.', 'success');
+          setTimeout(() => location.reload(), 1500);
+        } catch(err) { App.toast('파일 형식이 올바르지 않습니다', 'error'); }
+      };
+      reader.readAsText(input.files[0]);
+    }
+
+    function clearData() {
+      const keys = ['rm_receiving','rm_weighing','rm_quality','rm_inventory','rm_outbound','rm_history','rm_silos','rm_suppliers','rm_production_orders','rm_mixing_batches','rm_product_lots','rm_voc','rm_loss','rm_exceptions'];
+      keys.forEach(k => localStorage.removeItem(k));
+      document.getElementById('settings-modal').classList.remove('open');
+      App.toast('데이터가 초기화되었습니다', 'warning');
+      setTimeout(() => location.reload(), 1000);
+    }
+  </script>
+</body>
+</html>
