@@ -85,6 +85,7 @@ const App = (() => {
     aqua:         { workspace:'quality', title: '양어 물리검사',      subtitle: '', module: () => AquaPage },
     pet:          { workspace:'quality', title: '반려 품질·컴플레인', subtitle: '', module: () => PetPage },
     weather:      { workspace:'quality', title: '날씨·습도 기록',    subtitle: '', module: () => WeatherPage },
+    disease:      { workspace:'quality', title: '질병관리',          subtitle: '가축전염병 위기단계 · 발생 분포 지도 · 공장 인근 발생 (KAHIS)', module: () => DiseasePage },
     // ── 연구관리 (WS-FSMS-2311 신제품 개발 절차서 기준) ──
     rndPlan:      { workspace:'rnd', title: '제품기획',       subtitle: '절차서 5.1 제품 개발계획 · 5.2 제품설계(입력)', module: () => RndPlanPage },
     rndProject:   { workspace:'rnd', title: '개발과제관리',   subtitle: '업무절차 5.1~5.13 단계 진행 · 절차 체크', module: () => RndProjectPage },

@@ -7,7 +7,8 @@ const DiseaseAlert = (() => {
   // 위기단계는 "지금 몇 단계인가"만 알려준다. "무엇이 어디서 터졌는가"는 KAHIS 쪽.
   //   근거: 가축전염병예방법 제3조의2 — 농장명·소재지·발생일까지 공개된다.
   //   단, 농장명은 대부분 대표자 개인 이름이라 받지도 보여주지도 않는다(소재지·축종·두수만).
-  const KAHIS_URL = 'https://www.kahis.go.kr/home/lkntscrinfo/selectLkntsOccrrncList.do';
+  //   2026-11 확인: www.kahis.go.kr 쪽은 갱신이 멈춰 있어 home 쪽(현행)을 쓴다.
+  const KAHIS_URL = 'https://home.kahis.go.kr/home/lkntscrinfo/selectLkntsOccrrncList.do';
   // v3: 공식 표에 없는 질병을 '미표시'로 둔다(2026-11 럼피스킨이 표에서 빠짐). 예전 캐시는 쓰지 않는다.
   const CACHE_KEY = 'ws_disease_alert_cache_v3';
   try { localStorage.removeItem('ws_disease_alert_cache_v2'); } catch (_) {}
@@ -94,21 +95,26 @@ const DiseaseAlert = (() => {
     const items = [];
     const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
     let tr;
-    while ((tr = trRe.exec(html)) && items.length < limit) {
+    while ((tr = trRe.exec(html))) {
       const body = tr[1];
       if (!body.includes('list_g_line')) continue;      // 데이터 행만
       const tds = (body.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || []).map(obText);
       if (tds.length < 7) continue;
       const m = /^(\d{4}-\d{2}-\d{2})\s*(?:\((\d{4}-\d{2}-\d{2})\))?/.exec(tds[3]);
+      let occurredAt = m ? m[1] : tds[3];
+      const diagnosedAt = (m && m[2]) || '';
+      const y = +String(occurredAt).slice(0, 4);
+      if (diagnosedAt && (y < 2000 || y > new Date().getFullYear())) occurredAt = diagnosedAt;   // 원자료 오타(4026-…)
       items.push({
         // tds[1] 은 농장명(대부분 대표자 개인 이름) — 개인정보라 받지 않는다
         disease: tds[0], region: tds[2],
-        occurredAt: m ? m[1] : tds[3], diagnosedAt: (m && m[2]) || '',
+        occurredAt, diagnosedAt,
         species: tds[4], count: tds[5], agency: tds[6], endedAt: tds[7] || ''
       });
     }
     if (!items.length) throw new Error('발생현황 표를 읽지 못했습니다.');
-    return { source: 'KAHIS', url: KAHIS_URL, fetchedAt: new Date().toISOString(), items };
+    items.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
+    return { source: 'KAHIS', url: KAHIS_URL, fetchedAt: new Date().toISOString(), items: items.slice(0, limit) };
   };
 
   const loadOutbreaks = async () => {
