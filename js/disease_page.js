@@ -45,6 +45,8 @@ const DiseasePage = (() => {
     const d = new Date(String(s || '').slice(0, 10) + 'T00:00:00');
     return isNaN(d) ? 9999 : Math.floor((Date.now() - d.getTime()) / 86400000);
   };
+  const md = (s) => String(s).slice(5).replace('-', '.');
+  const recentSpan = (n) => `${md(daysBefore(n))} ~ ${md(ymd(new Date()))}`;
   const range = () => {
     if (st.preset === 'custom' && st.from && st.to) return [st.from, st.to];
     const p = PRESETS.find(x => x[0] === st.preset) || PRESETS[2];
@@ -287,17 +289,18 @@ const DiseasePage = (() => {
     const recent = rows.filter(r => daysAgo(r.occurredAt) <= RECENT_DAYS).length;
     const last = rows[0];
     const idx = regionIndex();
-    const near = factories().map(f => rows.filter(r => {
+    const fs = factories();
+    const near = rows.filter(r => {
       const g = idx[regionKey(r.region).key];
-      return g && daysAgo(r.occurredAt) <= 30 && km(f.ll, g.ll) <= st.radius;
-    }).length).reduce((a, b) => a + b, 0);
+      return g && daysAgo(r.occurredAt) <= 30 && fs.some(f => km(f.ll, g.ll) <= st.radius);
+    }).length;
     const card = (label, value, sub, color) => `<div class="kpi-card" style="--kpi-color:${color};cursor:default">
         <div class="kpi-label" style="text-transform:none">${label}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
     return `<div class="kpi-grid" style="margin-bottom:14px">
       ${card('발생 건수', rows.length.toLocaleString(), `${range().join(' ~ ')}`, 'var(--accent)')}
       ${card('발생 시군구', regions.size, '지도에 칠해진 시군구', 'var(--warning)')}
-      ${card(`최근 ${RECENT_DAYS}일 발생`, recent, last ? `마지막 ${h(last.occurredAt)} · ${h(diseaseName(last.disease))}` : '-', recent ? 'var(--danger)' : 'var(--success)')}
-      ${card(`공장 ${st.radius}km 안 (30일)`, near, '시군구 중심 기준 · 3개 공장 합계', near ? 'var(--danger)' : 'var(--success)')}
+      ${card(`최근 ${RECENT_DAYS}일 발생 건수`, recent, `${recentSpan(RECENT_DAYS)}${last ? ` · 마지막 ${h(md(last.occurredAt))} ${h(diseaseName(last.disease))}` : ''}`, recent ? 'var(--danger)' : 'var(--success)')}
+      ${card(`공장 ${st.radius}km 안 발생 건수 (최근 30일)`, near, `${recentSpan(30)} · 시군구 중심 기준 · 두 공장 반경에 겹치면 1건으로`, near ? 'var(--danger)' : 'var(--success)')}
     </div>`;
   };
 
@@ -381,11 +384,11 @@ const DiseasePage = (() => {
       const in30 = inR.filter(x => daysAgo(x.r.occurredAt) <= 30);
       const nearest = hits.filter(x => daysAgo(x.r.occurredAt) <= 30).sort((a, b) => a.d - b.d)[0];
       const tone = in30.length ? 'var(--danger)' : inR.length ? 'var(--warning)' : 'var(--success)';
-      const top = countBy(inR.map(x => x.r), r => diseaseName(r.disease)).slice(0, 3).map(([k, n]) => `${h(k)} ${n}`).join(' · ');
+      const top = countBy(inR.map(x => x.r), r => diseaseName(r.disease)).map(([k, n]) => `${h(k)} ${n}`).join(' · ');
       return `<div style="border:1px solid var(--border);border-left:3px solid ${tone};border-radius:4px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <b>${h(f.name)}</b><span class="mono" style="color:${tone};font-weight:700">${in30.length}<span style="font-size:11px;font-weight:400;color:var(--text-muted)"> 건 / 30일</span></span></div>
-        <div class="text-muted" style="font-size:12px;margin-top:4px">기간 전체 반경 안 ${inR.length}건${top ? ' — ' + top : ''}</div>
+          <b>${h(f.name)}</b><span class="mono" style="color:${tone};font-weight:700">${in30.length}<span style="font-size:11px;font-weight:400;color:var(--text-muted)"> 건 / 최근 30일</span></span></div>
+        <div class="text-muted" style="font-size:12px;margin-top:4px">조회 기간 전체 반경 안 ${inR.length}건${top ? ' — ' + top : ''}</div>
         <div style="font-size:12px;margin-top:4px">${nearest
           ? `30일 내 가장 가까운 발생: <b>${h(nearest.g.k)}</b> 약 ${Math.round(nearest.d)}km · ${h(diseaseName(nearest.r.disease))} · ${h(nearest.r.occurredAt)}`
           : '<span class="text-muted">30일 내 발생 없음</span>'}</div>
@@ -409,9 +412,10 @@ const DiseasePage = (() => {
     });
     const list = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
     if (!list.length) return '';
+    const [from, to] = range();
     const tr = list.map(([k, rs]) => {
       const last = rs[0];
-      const sp = countBy(rs, r => r.species.replace('-', ' ')).slice(0, 2).map(([s, n]) => `${h(s)}(${n})`).join(', ');
+      const sp = countBy(rs, r => r.species.replace('-', ' ')).map(([s, n]) => `${h(s)} ${n}`).join(' · ');
       const sidos = new Set(rs.map(r => regionKey(r.region).sido)).size;
       const recent = rs.filter(r => daysAgo(r.occurredAt) <= 30).length;
       const ended = rs.filter(r => r.endedAt).length;
@@ -419,7 +423,7 @@ const DiseasePage = (() => {
         <td><b>${h(k)}</b></td><td>${gradeText(last.grade)}</td>
         <td class="mono" style="text-align:right">${rs.length}</td>
         <td class="mono" style="text-align:right;${recent ? 'color:var(--danger);font-weight:700' : ''}">${recent}</td>
-        <td>${sp}</td><td class="mono" style="text-align:right">${sidos}</td>
+        <td style="font-size:12px">${sp}</td><td class="mono" style="text-align:right">${sidos}</td>
         <td class="mono">${h(last.occurredAt)}</td><td>${h(regionKey(last.region).key)}</td>
         <td class="mono" style="text-align:right">${ended}</td></tr>`;
     }).join('');
@@ -427,9 +431,12 @@ const DiseasePage = (() => {
       <div class="card-head"><div class="card-title">질병별 기본 현황</div>
         <div class="text-muted" style="font-size:12px">줄을 누르면 그 질병만 봅니다 · 법정 종은 KAHIS 분류</div></div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>질병</th><th>법정 종</th><th style="text-align:right">기간 발생</th><th style="text-align:right">최근 30일</th>
-          <th>주요 축종</th><th style="text-align:right">발생 시도</th><th>마지막 발생</th><th>마지막 발생지</th><th style="text-align:right">종식 기록</th></tr></thead>
+        <thead><tr><th>질병</th><th>법정 종</th>
+          <th style="text-align:right">발생 건수<div style="font-size:10px;font-weight:400;color:var(--text-muted)">${h(from)} ~ ${h(to)}</div></th>
+          <th style="text-align:right">최근 30일 건수<div style="font-size:10px;font-weight:400;color:var(--text-muted)">${recentSpan(30)}</div></th>
+          <th>축종별 건수</th><th style="text-align:right">발생 시도 수</th><th>마지막 발생</th><th>마지막 발생지</th><th style="text-align:right">종식된 건수</th></tr></thead>
         <tbody>${tr}</tbody></table></div>
+      <div class="text-muted" style="font-size:11px;margin-top:8px">건수는 KAHIS 발생 목록의 줄 수입니다(농장 한 곳의 확진 1번 = 1건, 마릿수 아님). 최근 30일 건수는 발생 건수의 일부이고, 축종별 건수를 더하면 발생 건수와 같습니다. 마릿수는 아래 발생 목록의 두수 칸에 있습니다.</div>
     </div>`;
   };
 
@@ -537,7 +544,7 @@ const DiseasePage = (() => {
       if (!p) { tip.style.display = 'none'; return; }
       const k = p.dataset.k;
       const rs = rows.filter(r => regionKey(r.region).key === k);
-      const dz = countBy(rs, r => diseaseName(r.disease)).slice(0, 4).map(([n, c]) => `${h(n)} ${c}`).join('<br>');
+      const dz = countBy(rs, r => diseaseName(r.disease)).map(([n, c]) => `${h(n)} ${c}건`).join('<br>');
       tip.innerHTML = `<b>${h(k)}</b><br>${rs.length ? `${rs.length}건 · 마지막 ${h(rs[0].occurredAt)}<br>${dz}` : '발생 없음'}`;
       const box = svg.parentElement.getBoundingClientRect();
       tip.style.left = Math.min(e.clientX - box.left + 12, box.width - 250) + 'px';
