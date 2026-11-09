@@ -4,7 +4,7 @@
 
 const App = (() => {
   const workspaces = {
-    qr:      { label: '입고·재고 QR', defaultPage: 'dashboard' },
+    qr:      { label: QR_ON ? '입고·재고 QR' : '입고·재고', defaultPage: 'dashboard' },
     quality: { label: '품질·실험실',  defaultPage: 'labDashboard' },
     formula: { label: '배합비·생산',  defaultPage: 'formula' },
     trace:   { label: '추적·클레임',  defaultPage: 'history' },
@@ -15,8 +15,7 @@ const App = (() => {
   };
 
   const pages = {
-    dashboard:  { workspace:'qr',      title: 'QR 입고배정 현황',   subtitle: '',   module: () => DashboardPage },
-    supplierInbound: { workspace:'qr', title: '협력사 입고예정', subtitle: '', module: () => SupplierInboundPage },
+    dashboard:  { workspace:'qr',      title: QR_ON ? 'QR 입고배정 현황' : '입고배정 현황',   subtitle: '',   module: () => DashboardPage },
     receiving:  { workspace:'qr',      title: '입고 관리',           subtitle: '',         module: () => ReceivingPage },
     silo:       { workspace:'qr',      title: '사일로 관리',         subtitle: '',      module: () => SiloPage      },
     inventory:  { workspace:'qr',      title: '톤백·지대 재고',      subtitle: '',                module: () => InventoryPage },
@@ -68,7 +67,7 @@ const App = (() => {
     calibration:  { workspace:'haccp', title: '계측기 검교정',     subtitle: '선행요건 · 교정주기·성적서 관리', module: () => CalibrationPage },
     auditFinding: { workspace:'haccp', title: '심사 지적사항',     subtitle: '연간 심사 이력 · 지적사항 개선 추적', module: () => AuditFindingPage },
     journal:      { workspace:'haccp', title: '전자 일지 작성',    subtitle: '양식 기반 점검일지 · 이탈 개선조치 · 상신/결재', module: () => JournalPage },
-    journalBoard: { workspace:'haccp', title: '일지 현황·결재함',  subtitle: '결재 대기 · 작성기한 초과 · 현장 QR', module: () => JournalBoardPage },
+    journalBoard: { workspace:'haccp', title: '일지 현황·결재함',  subtitle: QR_ON ? '결재 대기 · 작성기한 초과 · 현장 QR' : '결재 대기 · 작성기한 초과', module: () => JournalBoardPage },
     journalSetup: { workspace:'haccp', title: '일지 양식 설정',    subtitle: '점검항목·대상·주기·결재선 정의 (화면 개발 없이 일지 추가)', module: () => JournalSetupPage },
     sqfDocs:      { workspace:'haccp', title: 'SQF 기준서·문서', subtitle: '', module: () => SqfDocsPage },
     sqfCA:        { workspace:'haccp', title: 'SQF 시정조치',    subtitle: '', module: () => SqfCAPage },
@@ -242,12 +241,14 @@ const App = (() => {
 
   // ── 네비게이션 ──
   // 통합으로 사라진 화면 → 대체 화면으로 보낸다(기존 북마크·현장 QR·알림 링크 보호)
-  const REDIRECTS = { haccpLogs: 'journal', sqfLogs: 'journal' };
+  const REDIRECTS = { haccpLogs: 'journal', sqfLogs: 'journal', supplierInbound: 'dashboard' };
 
   const navigate = (page, ...args) => {
     // 유통기한 임박 화면은 장기재고 알람의 '유통기한' 탭으로 합쳤다(2026-10-19) — 옛 주소·바로가기는 그 탭으로
     if (page === 'expiryAlert') { page = 'longStock'; args = ['expiry']; }
     if (REDIRECTS[page]) page = REDIRECTS[page];
+    // QR 을 숨긴 동안 스캔 화면은 인쇄된 라벨의 링크(id 있음)로만 열린다
+    if (page === 'scan' && !QR_ON && !args[0]) page = 'dashboard';
     if (!pages[page]) page = 'dashboard';
     // 같은 페이지 재렌더(체크박스 토글·상태갱신·refreshPage)면 스크롤 위치 유지,
     //   실제 페이지 전환이면 상단으로. → 전 화면 공통(전역) 처리.

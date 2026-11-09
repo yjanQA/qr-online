@@ -379,8 +379,8 @@ const VOCPage = (() => {
       <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
         <div class="form-grid form-grid-3">
           <div class="form-group">
-            <label class="form-label">제품코드 QR/마스터</label>
-            <input type="text" class="form-input" id="voc-product-code" list="product-code-list" value="${prefillProductCode}" placeholder="제품코드 또는 QR키" onchange="VOCPage.findLotByMfg()">
+            <label class="form-label">${QR_ON ? '제품코드 QR/마스터' : '제품코드/마스터'}</label>
+            <input type="text" class="form-input" id="voc-product-code" list="product-code-list" value="${prefillProductCode}" placeholder="${QR_ON ? '제품코드 또는 QR키' : '제품코드'}" onchange="VOCPage.findLotByMfg()">
             <datalist id="product-code-list">${productMaster.slice(0,300).map(p=>`<option value="${p.code}">${p.code} - ${p.name}`).join('')}</datalist>
           </div>
           <div class="form-group">
@@ -588,10 +588,10 @@ const VOCPage = (() => {
             <div class="trace-step">
               <div class="trace-step-icon"></div>
               <div class="trace-step-content">
-                <div class="trace-step-label">사전입고 QR</div>
+                <div class="trace-step-label">${QR_ON ? '사전입고 QR' : '입고예정'}</div>
                 <div class="trace-step-desc">협력사 사전 등록</div>
                 <div class="trace-step-value ${receivings.length>0?'':'trace-empty'}">
-                  ${receivings.length>0 ? receivings.map(r=>`<div class="trace-link">${esc(r.preRegId||r.id)}</div>`).join('') : '<span class="text-muted text-xs">추적 정보 없음</span>'}
+                  ${receivings.length>0 ? receivings.map(r=>`<div class="trace-link">${esc(recvNo(r))}</div>`).join('') : '<span class="text-muted text-xs">추적 정보 없음</span>'}
                 </div>
               </div>
             </div>
@@ -688,7 +688,7 @@ const VOCPage = (() => {
             <table>
               <thead><tr><th>단계</th><th>연결 데이터</th><th>저장 기준</th><th>추적 목적</th></tr></thead>
               <tbody>
-                <tr><td>입고</td><td>QR, 협력사, 원료코드, 계근값</td><td>사전입고번호 + 원료 LOT</td><td>어떤 원료가 언제 들어왔는지 확인</td></tr>
+                <tr><td>입고</td><td>${QR_ON ? 'QR' : '송장'}, 협력사, 원료코드, 계근값</td><td>사전입고번호 + 원료 LOT</td><td>어떤 원료가 언제 들어왔는지 확인</td></tr>
                 <tr><td>보관</td><td>사일로, FIFO 순서, LOT별 잔량</td><td>silo_lot_balances</td><td>사일로 안 LOT 구성 추정</td></tr>
                 <tr><td>투입지시</td><td>생산 LOT, 배합코드, 지시량</td><td>production_orders</td><td>어느 배합에 어떤 사일로를 썼는지 확인</td></tr>
                 <tr><td>배합</td><td>실투입량, FIFO 차감 LOT, 작업자</td><td>mixing_batches + material_consumptions</td><td>완제품 LOT에서 원료 LOT까지 역추적</td></tr>

@@ -29,7 +29,7 @@ const ProductStockPage = (() => {
 
         <div class="card">
           <div class="table-wrapper"><table>
-            <thead><tr><th>제품 LOT</th><th>제품명</th><th>공장</th><th>생산일</th><th>포장</th><th class="td-right">생산</th><th class="td-right">출고</th><th class="td-right">재고</th><th>QR</th></tr></thead>
+            <thead><tr><th>제품 LOT</th><th>제품명</th><th>공장</th><th>생산일</th><th>포장</th><th class="td-right">생산</th><th class="td-right">출고</th><th class="td-right">재고</th><th>${QR_ON ? 'QR' : '추적'}</th></tr></thead>
             <tbody>${rows.length===0?`<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-muted)">생산된 제품 LOT이 없습니다</td></tr>`:
               rows.map(r => `<tr${r.remaining===0?' style="opacity:.55"':''}>
                 <td class="td-mono text-xs">${r.fgLotNo||r.id}</td>

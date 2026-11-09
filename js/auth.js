@@ -43,7 +43,7 @@ const Auth = (() => {
 
   // 접근 권한 단위 = 워크스페이스(상단 업무영역). app.js workspaces와 일치
   const WORKSPACES = [
-    { id: 'qr',      label: '입고·재고 QR' },
+    { id: 'qr',      label: QR_ON ? '입고·재고 QR' : '입고·재고' },
     { id: 'quality', label: '품질·실험실' },
     { id: 'formula', label: '배합비·생산' },
     { id: 'trace',   label: '추적·클레임' },
@@ -175,7 +175,9 @@ const Auth = (() => {
   const currentUser = () => {
     const e = sessionEmail();
     const u = e ? findUser(e) : null;
-    if (NEED_LOGIN || (u && u.status === 'APPROVED')) return u;
+    if (u && u.status === 'APPROVED') return u;
+    // 온라인판 둘러보기(세션 없이 손님 이름만 있음)는 손님으로 본다
+    if (NEED_LOGIN && !(ONLINE && !e && guestProfile())) return u;
     return guestUser();          // 로그인 없이 쓰는 중 — 이 기기의 이름
   };
   const isMaster = () => currentUser()?.role === 'MASTER';
@@ -223,7 +225,7 @@ const Auth = (() => {
         <div class="auth-brand">
           <div class="auth-logo"></div>
           <div>
-            <div class="auth-title">우성사료 QR 이력관리</div>
+            <div class="auth-title">${QR_ON ? '우성사료 QR 이력관리' : '우성 품질관리 플랫폼'}</div>
             <div class="auth-sub">사내 계정으로 로그인하세요</div>
           </div>
         </div>
@@ -274,6 +276,8 @@ const Auth = (() => {
           <button class="btn btn-primary btn-block" onclick="Auth.doLogin()">로그인</button>
         `}
         ${NEED_LOGIN ? '' : '<button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="Auth.cancelLogin()">로그인 없이 계속</button>'}
+        ${ONLINE ? `<button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="Auth.browseOnline()">로그인 없이 둘러보기</button>
+          <div class="auth-foot">둘러보기는 시험용 표본 자료로 보여 줍니다. 입력한 내용은 이 브라우저에만 남고 다른 사람과 공유되지 않습니다.</div>` : ''}
       </div>`;
     // 저장된 아이디가 있으면 비밀번호로 바로 포커스, 없으면 이메일/이름
     setTimeout(() => {
@@ -295,7 +299,7 @@ const Auth = (() => {
         <div class="auth-brand">
           <div class="auth-logo"></div>
           <div>
-            <div class="auth-title">우성사료 QR 이력관리</div>
+            <div class="auth-title">${QR_ON ? '우성사료 QR 이력관리' : '우성 품질관리 플랫폼'}</div>
             <div class="auth-sub">로그인 없이 사용합니다. 기록에 남길 이름만 적어 주세요.</div>
           </div>
         </div>
@@ -321,6 +325,13 @@ const Auth = (() => {
     toast(`${v} 님으로 시작합니다`, 'success');
   };
   const renameGuest = () => askName();
+  // 온라인판 둘러보기: 가입·승인 없이 표본 자료로 화면만 본다. 서버 동기화는 로그인 세션이 있어야 켜지므로 꺼진 채로 남는다.
+  const browseOnline = () => {
+    saveGuest('둘러보기');
+    hideLogin();
+    activateSession();
+    refreshTopbar();
+  };
   const adminLogin = () => { mode = 'login'; showLogin(); };
   // 관리자 로그인 창을 닫고 로그인 없이 계속
   const cancelLogin = () => {
@@ -748,6 +759,7 @@ const Auth = (() => {
       // 온라인판: 이 브라우저에 로그인 세션과 승인된 계정 사본이 모두 있어야 들어간다
       const u = currentUser();
       if (u && u.status === 'APPROVED' && ONLINE.hasSession()) { hideLogin(); activateSession(); ONLINE.watch(); }
+      else if (!sessionEmail() && guestProfile()) { hideLogin(); activateSession(); }   // 둘러보기로 들어온 적 있는 브라우저
       else { clearSession(); showLogin(); }
       return;
     }
@@ -770,7 +782,7 @@ const Auth = (() => {
 
   return {
     init, setMode, doLogin, doSignup, logout, rememberToggle, onEmailInput,
-    saveGuestName, renameGuest, adminLogin, cancelLogin, loginRequired: () => NEED_LOGIN,
+    saveGuestName, renameGuest, browseOnline, adminLogin, cancelLogin, loginRequired: () => NEED_LOGIN,
     openAdmin, closeAdmin, approve, reject, toggleRole, transferMaster, removeUser, refreshAdmin,
     openPerms, closePerms, permAll, savePerms,
     enforceLanding: applyPermissions,

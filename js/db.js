@@ -516,6 +516,9 @@ const DB = (() => {
       receivedDate:  data.receivedDate || now().split('T')[0],
       manufactureDate: data.manufactureDate || '',
       expiryDate:    data.expiryDate || '',
+      supplierLot:   data.supplierLot || '',        // 협력사 원 LOT(내부 LOT 와 별개, 원문 그대로)
+      invoiceNo:     data.invoiceNo || '',          // 송장번호
+      invoiceScan:   data.invoiceScan || null,      // 스캔 원본 메타(PhotoStore)
       attachmentNote: data.attachmentNote || '',
       memo:          data.memo || '',
       status:        data.status || 'PENDING_SCALE',
@@ -654,7 +657,7 @@ const DB = (() => {
     addHistory({
       refId: item.id,
       refType: 'RECEIVING',
-      action: '협력사 입고예정 QR 발행',
+      action: QR_ON ? '협력사 입고예정 QR 발행' : '입고예정 등록',
       detail: `${item.supplierName || item.supplier || '-'} / ${item.materialName} / ${item.expectedWeight}kg`,
       actor: item.createdBy
     });
@@ -684,7 +687,7 @@ const DB = (() => {
     const closed = ['IN_STOCK', 'CANCELLED', 'REJECTED'];
     const requested = String(action || '').toUpperCase();
     if (closed.includes(item.status)) {
-      throw new Error('이미 종료된 QR입니다. 중복 입고 처리가 불가합니다.');
+      throw new Error(`이미 종료된 ${QR_ON ? 'QR' : '입고 건'}입니다. 중복 입고 처리가 불가합니다.`);
     }
 
     const actor = patch.actor || patch.processedBy || '현장';
@@ -809,7 +812,7 @@ const DB = (() => {
   // ============================================================
   const QC_CONFIG_KEY  = 'rm_qc_config';
   const defaultQCGates = [
-    { id:'gate1', order:1, name:'Gate 1 입고확인',    icon:'', items:['QR 코드 확인','차량번호 일치','원료명 일치','계근값 확인','서류 확인'], required:true  },
+    { id:'gate1', order:1, name:'Gate 1 입고확인',    icon:'', items:[...(QR_ON ? ['QR 코드 확인'] : []),'차량번호 일치','원료명 일치','계근값 확인','서류 확인'], required:true  },
     { id:'gate2', order:2, name:'Gate 2 입고검수',    icon:'', items:['포장 상태','이물질 여부','색상/냄새 이상','수분흡습 여부','유통기한 확인'], required:true  },
     { id:'gate3', order:3, name:'Gate 3 분석결과',    icon:'', items:['수분 함량(기준이하)','단백질 함량','지방 함량','회분 함량','위해요소 검사'], required:false },
     { id:'gate4', order:4, name:'Gate 4 품질판정',    icon:'', items:['종합 판정'], required:true  },
@@ -972,7 +975,7 @@ const DB = (() => {
   const registerStock = (data) => {
     const receiving = getReceivingById(data.receivingId);
     if (!receiving) throw new Error('입고 문서 없음');
-    if (receiving.status === 'IN_STOCK') throw new Error('이미 재고 등록된 QR입니다. 중복 입고가 불가합니다.');
+    if (receiving.status === 'IN_STOCK') throw new Error(`이미 재고 등록된 ${QR_ON ? 'QR' : '입고 건'}입니다. 중복 입고가 불가합니다.`);
     if (['REJECTED', 'CANCELLED'].includes(receiving.status)) throw new Error('반려 또는 취소된 입고 건은 재고 등록할 수 없습니다.');
     const list     = getInventory();
     const weighing = getWeighingByReceivingId(data.receivingId);
@@ -1830,7 +1833,7 @@ const DB = (() => {
   // ============================================================
   const getStats = (factory) => {
     const receivings  = factory && factory !== 'ALL' ? getReceivings().filter(r => r.factory === factory) : getReceivings();
-    const today       = now().split('T')[0];
+    const today       = ymdLocal(new Date());
     const inspections = getInspections();
     const inventory   = getInventory();
     const outbounds   = getOutbounds();

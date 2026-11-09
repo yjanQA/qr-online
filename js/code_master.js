@@ -100,8 +100,8 @@ const CodeMasterPage = (() => {
       <div class="form-group" style="margin:0;min-width:120px"><label class="form-label">배합코드</label><input type="text" class="form-input form-input-sm mono" id="cm-formula" placeholder="예: 5993"></div>`;
 
     const head = viewKind === 'raw'
-      ? '<th>코드</th><th>원료명</th><th>분류</th><th>단위</th><th>주공급처</th><th>QR값</th><th>상태</th><th style="text-align:right">작업</th>'
-      : '<th>코드</th><th>제품명</th><th>배합코드</th><th>축종</th><th>QR값</th><th>상태</th><th style="text-align:right">작업</th>';
+      ? '<th>코드</th><th>원료명</th><th>분류</th><th>단위</th><th>주공급처</th>' + (QR_ON ? '<th>QR값</th>' : '') + '<th>상태</th><th style="text-align:right">작업</th>'
+      : '<th>코드</th><th>제품명</th><th>배합코드</th><th>축종</th>' + (QR_ON ? '<th>QR값</th>' : '') + '<th>상태</th><th style="text-align:right">작업</th>';
 
     const body = rows.length ? rows.map(m => {
       const common = `
@@ -117,7 +117,7 @@ const CodeMasterPage = (() => {
         <td class="text-muted">${esc(m.category || '-')}</td>
         <td class="text-muted">${esc(m.unit || 'kg')}</td>
         <td class="text-muted ellipsis" style="max-width:130px">${esc(m.supplier || '-')}</td>
-        <td class="mono text-muted" style="font-size:11px">${esc(m.qrCode || '')}</td>
+        <td class="mono text-muted qr-only" style="font-size:11px">${esc(m.qrCode || '')}</td>
         ${common}
       </tr>` : `
       <tr class="${m.active !== false ? '' : 'row-dim'}">
@@ -125,7 +125,7 @@ const CodeMasterPage = (() => {
         <td>${esc(m.name)}</td>
         <td class="mono text-muted">${esc(m.formulaCode || '-')}</td>
         <td class="text-muted">${esc(LabDB.productCategory(m.code))}</td>
-        <td class="mono text-muted" style="font-size:11px">${esc(m.qrCode || '')}</td>
+        <td class="mono text-muted qr-only" style="font-size:11px">${esc(m.qrCode || '')}</td>
         ${common}
       </tr>`;
     }).join('') : `<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px">${query ? '검색 결과가 없습니다' : '코드가 없습니다'}</td></tr>`;
@@ -183,7 +183,7 @@ const CodeMasterPage = (() => {
       ${capNote}
       <div class="text-muted" style="font-size:12px;margin-top:10px;line-height:1.6">
         · 코드는 발행 후 변경할 수 없습니다(명칭·분류 등만 수정 가능). 잘못 발행한 코드는 <b>중지</b>로 전환하세요.<br>
-        · QR값(WS-MAT-코드 / WS-PROD-코드)은 발행 시 자동 생성되며 QR 스캔·라벨 출력에 그대로 사용됩니다.
+        ${QR_ON ? '· QR값(WS-MAT-코드 / WS-PROD-코드)은 발행 시 자동 생성되며 QR 스캔·라벨 출력에 그대로 사용됩니다.' : ''}
       </div>
     </div>`;
   };
@@ -291,7 +291,7 @@ const CodeMasterPage = (() => {
           <div class="cmed-fld" style="width:130px"><label>수정자 <span style="color:#e05252">*</span></label><input id="cmed-by" placeholder="담당자명"></div>
           <div class="cmed-fld" style="flex:1"><label>수정사유 <span style="color:#e05252">*</span></label><input id="cmed-reason" placeholder="예: 제품명 변경, 배합코드 정정"></div>
         </div>
-        <div class="text-muted" style="font-size:11.5px;margin:4px 0 12px">코드 자체는 변경할 수 없습니다. QR값: <span class="mono">${esc(m.qrCode || '')}</span></div>
+        <div class="text-muted" style="font-size:11.5px;margin:4px 0 12px">코드 자체는 변경할 수 없습니다.${QR_ON ? ` QR값: <span class="mono">${esc(m.qrCode || '')}</span>` : ''}</div>
         ${histHtml}
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
           <button class="btn btn-ghost btn-sm" onclick="CodeMasterPage.closeEdit()">취소</button>

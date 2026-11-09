@@ -1,7 +1,7 @@
 {
   "name": "우성 품질관리 플랫폼",
   "short_name": "우성품질",
-  "description": "QR 기반 원료 입고, 재고, 품질, 배합비, VOC 역추적 현장 앱",
+  "description": "원료 입고, 재고, 품질, 배합비, VOC 역추적 현장 앱",
   "lang": "ko-KR",
   "start_url": "./index.html",
   "scope": "./",
@@ -20,17 +20,17 @@
   ],
   "shortcuts": [
     {
-      "name": "QR 스캔",
-      "short_name": "스캔",
-      "description": "현장 QR 스캔 화면으로 이동",
-      "url": "./index.html?page=scan",
+      "name": "입고배정 현황",
+      "short_name": "입고",
+      "description": "입고 현황과 송장 스캔 화면으로 이동",
+      "url": "./index.html?page=dashboard",
       "icons": [{ "src": "assets/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
-      "name": "협력사 입고예정",
-      "short_name": "입고예정",
-      "description": "협력사 사전입고 QR 발행 화면으로 이동",
-      "url": "./index.html?page=supplierInbound",
+      "name": "입고 관리",
+      "short_name": "입고관리",
+      "description": "입고 목록과 계근 대기 화면으로 이동",
+      "url": "./index.html?page=receiving",
       "icons": [{ "src": "assets/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]

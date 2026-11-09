@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta name="description" content="우성 품질관리 플랫폼 — QR 기반 차량입고·사일로·생산·품질·VOC 통합 추적 시스템">
+  <meta name="description" content="우성 품질관리 플랫폼 — 차량입고·사일로·생산·품질·VOC 통합 추적 시스템">
   <meta name="theme-color" content="#0a0e1a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,6 +24,7 @@
   <script src="js/online_config.js"></script>
   <script src="js/online_bridge.js"></script>
   <script src="js/online_auth.js"></script>
+  <script src="js/feature_flags.js?v=20261106-noqr2"></script>
   <script type="importmap">
   { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
@@ -39,7 +40,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <!-- 스타일 -->
-  <link rel="stylesheet" href="css/style.css?v=20260814-pflow2">
+  <link rel="stylesheet" href="css/style.css?v=20261106-noqr">
   <link rel="stylesheet" href="css/lab.css?v=20260814-auditview">
 </head>
 <body>
@@ -78,15 +79,11 @@
         <div class="nav-group-label" data-workspace="qr">메인</div>
         <div class="nav-item active" data-workspace="qr" data-page="dashboard" onclick="App.navigate('dashboard')">
           <span class="nav-icon"></span>
-          QR 입고배정 현황
-        </div>
-
-        <div class="nav-group-label" data-workspace="qr">입고 · 재고 QR</div>
-        <div class="nav-item" data-workspace="qr" data-page="supplierInbound" onclick="App.navigate('supplierInbound')">
-          <span class="nav-icon"></span>
-          협력사 입고예정
+          <span data-noqr="입고배정 현황">QR 입고배정 현황</span>
           <span class="nav-badge hidden" id="badge-supplier-inbound">0</span>
         </div>
+
+        <div class="nav-group-label" data-workspace="qr" data-noqr="입고 · 재고">입고 · 재고 QR</div>
         <div class="nav-item" data-workspace="qr" data-page="receiving" onclick="App.navigate('receiving')">
           <span class="nav-icon"></span>
           입고 관리
@@ -119,7 +116,7 @@
           부자재 재고
           <span class="nav-badge hidden" id="badge-submaterial">0</span>
         </div>
-        <div class="nav-item" data-workspace="qr" data-page="scan" onclick="App.navigate('scan')">
+        <div class="nav-item qr-only" data-workspace="qr" data-page="scan" onclick="App.navigate('scan')">
           <span class="nav-icon"></span>
           QR 스캔
         </div>
@@ -417,12 +414,12 @@
       <header class="topbar">
         <button class="sidebar-toggle" onclick="App.toggleSidebar()"></button>
         <div class="topbar-heading">
-          <div class="topbar-title" id="topbar-title">QR 입고배정 현황</div>
+          <div class="topbar-title" id="topbar-title" data-noqr="입고배정 현황">QR 입고배정 현황</div>
           <div class="topbar-subtitle" id="topbar-subtitle">실시간 입고 · 스캔 · 사일로 현황</div>
         </div>
         <div class="topbar-actions">
           <div class="workspace-switcher" id="workspace-switcher">
-            <button class="workspace-tab active" data-workspace="qr" onclick="App.switchWorkspace('qr')">입고·재고 QR</button>
+            <button class="workspace-tab active" data-workspace="qr" onclick="App.switchWorkspace('qr')" data-noqr="입고·재고">입고·재고 QR</button>
             <button class="workspace-tab" data-workspace="quality" onclick="App.switchWorkspace('quality')">품질·실험실</button>
             <button class="workspace-tab" data-workspace="formula" onclick="App.switchWorkspace('formula')">배합비·생산</button>
             <button class="workspace-tab" data-workspace="trace" onclick="App.switchWorkspace('trace')">추적·클레임</button>
@@ -435,7 +432,7 @@
           <div class="weather-badge hidden" id="topbar-weather" title="날씨·습도"></div>
           <button class="btn btn-ghost btn-sm no-print" id="print-page-btn" onclick="App.printPage()" title="현재 화면 인쇄 / PDF 저장">인쇄</button>
           <button class="btn btn-ghost btn-sm hidden" id="pwa-install-btn" onclick="PWAInstall.prompt()">앱 설치</button>
-          <button class="btn btn-outline-primary btn-sm" data-workspace-action="qr" onclick="App.navigate('scan')">
+          <button class="btn btn-outline-primary btn-sm qr-only" data-workspace-action="qr" onclick="App.navigate('scan')">
             QR 스캔
           </button>
           <button class="btn btn-primary btn-sm" data-workspace-action="qr" onclick="App.navigate('receiving');setTimeout(()=>ReceivingPage.openAddModal(),200)">
@@ -486,14 +483,14 @@
 
   <!-- ── JS 모듈 로드 순서 중요 ── -->
   <script src="js/audit_log.js?v=20260825-lawwatch"></script>
-  <script src="js/db.js?v=20260814-auditview"></script>
+  <script src="js/db.js?v=20261106-noqr"></script>
   <script src="js/qr.js?v=20260814-auditview"></script>
-  <script src="js/disease_alert.js?v=20260825-lawwatch"></script>
+  <script src="js/disease_alert.js?v=20261105-diseasefix"></script>
   <script src="js/haccp_edu_alert.js?v=20260814-auditview"></script>
   <script src="js/feed_production.js?v=20260814-auditview"></script>
-  <script src="js/dashboard.js?v=20260814-auditview"></script>
-  <script src="js/supplier_inbound.js?v=20260814-auditview"></script>
-  <script src="js/receiving.js?v=20260814-auditview"></script>
+  <script src="js/dashboard.js?v=20261106-noqr4"></script>
+  <script src="js/supplier_inbound.js?v=20261106-noqr"></script>
+  <script src="js/receiving.js?v=20261106-noqr2"></script>
   <script src="js/quality.js?v=20260814-auditview"></script>
   <script src="js/silo.js?v=20260814-auditview"></script>
   <script src="js/inventory.js?v=20260814-auditview"></script>
@@ -512,13 +509,13 @@
   <script src="js/rnd_product.js?v=20260814-rnd"></script>
   <script src="js/rnd_research.js?v=20260814-rnd"></script>
   <script src="js/production.js?v=20261019-stocklevel"></script>
-  <script src="js/batch.js?v=20261019-stocklevel"></script>
+  <script src="js/batch.js?v=20261106-noqr"></script>
   <script src="js/outbound.js?v=20260814-auditview"></script>
-  <script src="js/history.js?v=20261019-tracesearch"></script>
-  <script src="js/voc.js?v=20260814-auditview"></script>
+  <script src="js/history.js?v=20261106-noqr2"></script>
+  <script src="js/voc.js?v=20261106-noqr2"></script>
   <script src="js/voc_dashboard.js?v=20260814-auditview"></script>
-  <script src="js/supplier.js?v=20261016-selfcheck"></script>
-  <script src="js/code_master.js?v=20260814-auditview"></script>
+  <script src="js/supplier.js?v=20261106-noqr2"></script>
+  <script src="js/code_master.js?v=20261106-noqr"></script>
   <script src="js/pwa_install.js?v=20260814-auditview"></script>
   <script src="js/ai_engine.js?v=20260814-auditview"></script>
   <script src="js/process_flow_data.js?v=20260814-pflow2"></script>
@@ -527,20 +524,21 @@
   <script src="js/equipment.js?v=20260814-auditview"></script>
   <script src="js/submaterial.js?v=20260814-auditview"></script>
   <script src="js/issue.js?v=20260814-auditview"></script>
-  <script src="js/productstock.js?v=20261019-stocklevel"></script>
+  <script src="js/productstock.js?v=20261106-noqr2"></script>
   <script src="js/stock_level.js?v=20261019-stocklevel"></script>
   <script src="js/plate_scan.js?v=20260814-auditview"></script>
   <!-- 품질 분석관리(통합) 모듈 -->
   <script src="js/xlsx_export.js?v=20260814-auditview"></script>
   <script src="js/docx_export.js?v=20260814-auditview"></script>
-  <script src="js/lab_common.js?v=20260814-auditview"></script>
+  <script src="js/lab_common.js?v=20261106-enterdown"></script>
   <script src="js/filestore.js?v=20260814-auditview"></script>
   <script src="js/photostore.js?v=20260814-auditview"></script>
+  <script src="js/invoice_scan.js?v=20261106-noqr2"></script>
   <script src="js/lab_db.js?v=20260825-lawsplit"></script>
   <script src="js/winboard.js?v=20260814-auditview"></script>
   <script src="js/lab_workmap.js?v=20260814-auditview"></script>
   <script src="js/lab_matrix.js?v=20260814-auditview"></script>
-  <script src="js/lab_dashboard.js?v=20260819-dashpref"></script>
+  <script src="js/lab_dashboard.js?v=20261106-noqr"></script>
   <script src="js/lab_formula_trend.js?v=20260814-auditview"></script>
   <script src="js/lab_xlsx_import.js?v=20260814-auditview"></script>
   <script src="js/lab_receive.js?v=20260814-auditview"></script>
@@ -583,16 +581,16 @@
   <script src="js/journal_db.js?v=20260814-auditview"></script>
   <script src="js/journal.js?v=20260814-auditview"></script>
   <script src="js/journal_setup.js?v=20260814-auditview"></script>
-  <script src="js/journal_board.js?v=20260814-auditview"></script>
+  <script src="js/journal_board.js?v=20261106-noqr"></script>
   <!-- 날씨·습도 자동기록 -->
   <script src="js/weather.js?v=20260814-auditview"></script>
   <!-- 전역 알림 센터 -->
   <script src="js/notifications.js?v=20261019-stocklevel"></script>
 
-  <script src="js/sync.js?v=20261019-stocklevel"></script>
-  <script src="js/app.js?v=20261019-stockmerge"></script>
+  <script src="js/sync.js?v=20261106-invoicescan"></script>
+  <script src="js/app.js?v=20261106-noqr"></script>
   <!-- 로그인 / 회원가입 / 마스터 승인 -->
-  <script src="js/auth.js?v=20260814-auditview"></script>
+  <script src="js/auth.js?v=20261109-browse2"></script>
 
   <!-- 설정 기능 -->
   <script>

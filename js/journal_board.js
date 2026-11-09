@@ -38,7 +38,7 @@ const JournalBoardPage = (() => {
       <b>결재 대기 ${box.length}건</b> — 아래 결재함에서 검토·승인 처리하세요.
     </div>`);
 
-    const tabs = [['BOX', `결재함 (${box.length})`], ['DUE', '작성 현황'], ['QR', '현장 QR']].map(([k, l]) =>
+    const tabs = [['BOX', `결재함 (${box.length})`], ['DUE', '작성 현황'], ['QR', '현장 QR']].filter(([k]) => QR_ON || k !== 'QR').map(([k, l]) =>
       `<button class="factory-tab ${tab === k ? 'active' : ''}" onclick="JournalBoardPage.setTab('${k}')">${l}</button>`).join('');
 
     return `

@@ -95,12 +95,12 @@ const BatchPage = (() => {
     <div class="card">
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>제품LOT</th><th>QR키</th><th>공장</th><th>제품코드</th><th>제품명</th><th class="td-right">수량(kg)</th><th>포장형태</th><th>포장수</th><th>생산일</th><th>상태</th><th>액션</th></tr></thead>
+          <thead><tr><th>제품LOT</th><th class="qr-only">QR키</th><th>공장</th><th>제품코드</th><th>제품명</th><th class="td-right">수량(kg)</th><th>포장형태</th><th>포장수</th><th>생산일</th><th>상태</th><th>액션</th></tr></thead>
           <tbody>
             ${products.length===0?`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-muted)">제품 LOT가 없습니다</td></tr>`:
             products.map(p=>`<tr>
               <td><span class="td-mono text-xs">${p.fgLotNo}</span></td>
-              <td><span class="td-mono text-xs">${p.qrCode || DB.makeQRValue('PRODUCT_LOT', p.fgLotNo)}</span></td>
+              <td class="qr-only"><span class="td-mono text-xs">${p.qrCode || DB.makeQRValue('PRODUCT_LOT', p.fgLotNo)}</span></td>
               <td>${DB.getFactoryName(p.factory)}</td>
               <td><span class="td-mono text-xs">${p.productCode || '-'}</span></td>
               <td><strong>${p.productName}</strong></td>

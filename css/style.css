@@ -1741,6 +1741,7 @@ tbody tr:hover { background: var(--bg-hover); }
   grid-template-columns: repeat(6, 1fr);
   gap: 12px;
 }
+.kpi-grid-5 { grid-template-columns: repeat(5, 1fr); }
 @media (max-width: 1200px) { .kpi-grid-6 { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px)  { .kpi-grid-6 { grid-template-columns: repeat(2, 1fr); } }
 
@@ -1804,6 +1805,7 @@ tbody tr:hover { background: var(--bg-hover); }
   gap: 6px;
 }
 .disease-alert-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.disease-alert-meta.stale { color: var(--danger); font-weight: 600; }
 .disease-summary-badge {
   display: inline-flex;
   align-items: center;
@@ -1818,6 +1820,7 @@ tbody tr:hover { background: var(--bg-hover); }
 .disease-summary-badge.watch { color: var(--info); background: var(--info-bg); border-color: rgba(6,182,212,0.3); }
 .disease-summary-badge.caution { color: var(--warning); background: var(--warning-bg); border-color: rgba(245,158,11,0.3); }
 .disease-summary-badge.critical { color: var(--danger); background: var(--danger-bg); border-color: rgba(239,68,68,0.35); }
+.disease-summary-badge.unknown { color: var(--text-muted); background: transparent; border-color: var(--border); }
 .disease-alert-body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1882,6 +1885,7 @@ tbody tr:hover { background: var(--bg-hover); }
 .disease-cur.watch { background: rgba(6,182,212,0.72); color: #fff; border-color: rgba(103,232,249,0.4); }
 .disease-cur.caution { background: rgba(245,158,11,0.82); color: #f4f4f4; border-color: rgba(253,230,138,0.5); }
 .disease-cur.critical { background: rgba(239,68,68,0.92); color: #fff; border-color: rgba(252,165,165,0.55); }
+.disease-cur.unknown { background: transparent; color: var(--text-muted); border-color: var(--border); }
 /* 위기단계 아래 '최근 발생' 한 줄 — 무엇이 어디서 터졌는가 */
 .disease-outbreak {
   display: flex;
@@ -2037,6 +2041,10 @@ tbody tr:hover { background: var(--bg-hover); }
 .silo-date-info    { display: flex; gap: 16px; }
 
 /* ── QR 마스터 조회 / 재고주기 ── */
+/* QR 숨김: js/feature_flags.js 의 스위치가 html 에 no-qr 를 붙인다 */
+.no-qr .qr-only, .no-qr .qr-master-preview { display: none !important; }
+.no-qr .qr-master-grid { grid-template-columns: 1fr; }
+.no-qr .kpi-grid-5 { grid-template-columns: repeat(3, 1fr); }
 .qr-master-grid {
   display: grid;
   grid-template-columns: 190px 1fr;

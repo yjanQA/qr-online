@@ -1,27 +1,12 @@
 // ============================================================
-// supplier_inbound.js — 협력사 입고예정 등록 · QR 발행
+// supplier_inbound.js — 협력사 입고예정 등록 · QR 발행 기능
+//   목록 화면은 QR 입고배정 현황(dashboard.js)으로 합쳤다(2026-11-06). 여기에는 등록·QR·도착·보류·반려만 남는다.
 // ============================================================
 
 const SupplierInboundPage = (() => {
   let supplierSearchTimeout = null;
   let materialSearchTimeout = null;
   let prefillSupplierId = '';
-
-  const statusBadge = (status) => {
-    const map = {
-      QR_ISSUED:        '<span class="badge badge-info">QR발행</span>',
-      ARRIVED:          '<span class="badge badge-warning">도착확인</span>',
-      PENDING_SCALE:    '<span class="badge badge-warning">계근대기</span>',
-      PENDING_QC:       '<span class="badge badge-info">검사대기</span>',
-      PENDING_APPROVAL: '<span class="badge badge-alert">승인대기</span>',
-      APPROVED:         '<span class="badge badge-pass">검사합격</span>',
-      IN_STOCK:         '<span class="badge badge-pass">입고완료</span>',
-      HOLD:             '<span class="badge badge-hold">보류</span>',
-      REJECTED:         '<span class="badge badge-fail">반려</span>',
-      CANCELLED:        '<span class="badge badge-default">취소</span>'
-    };
-    return map[status] || `<span class="badge badge-default">${status || '-'}</span>`;
-  };
 
   const escapeText = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -33,55 +18,8 @@ const SupplierInboundPage = (() => {
   const supplierName = (r) => r.supplierName || r.supplier || '-';
   const isOpenStatus = (status) => ['QR_ISSUED', 'ARRIVED', 'PENDING_SCALE', 'PENDING_QC', 'PENDING_APPROVAL', 'HOLD'].includes(status);
 
-  const getList = () => {
-    const factory = App.getFactory?.() || 'ALL';
-    const list = DB.getSupplierPreNotices().slice().reverse();
-    return factory === 'ALL' ? list : list.filter(r => r.factory === factory);
-  };
-
-  const render = () => {
-    const list = getList();
-    const stats = {
-      issued: list.filter(r => r.status === 'QR_ISSUED').length,
-      arrived: list.filter(r => r.status === 'ARRIVED').length,
-      pending: list.filter(r => r.status === 'PENDING_SCALE' || r.status === 'PENDING_QC' || r.status === 'PENDING_APPROVAL').length,
-      hold: list.filter(r => r.status === 'HOLD').length,
-      rejected: list.filter(r => r.status === 'REJECTED').length,
-      done: list.filter(r => r.status === 'IN_STOCK').length
-    };
-
-    return `
-      <div class="fade-in">
-        <div class="flex items-center justify-between mb-20">
-          <div class="text-sm text-muted">협력사 사전입고 QR ${list.length}건</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-outline-primary btn-sm" onclick="App.navigate('scan')">현장 QR 스캔</button>
-            <button class="btn btn-primary" onclick="SupplierInboundPage.openAddModal()">＋ 입고예정 등록</button>
-          </div>
-        </div>
-
-        <div class="inventory-summary-grid mb-20">
-          <div class="inventory-summary-card">
-            <div class="summary-label">QR 발행</div>
-            <div class="summary-value">${formatNum(stats.issued)}<span>건</span></div>
-          </div>
-          <div class="inventory-summary-card">
-            <div class="summary-label">도착 확인</div>
-            <div class="summary-value">${formatNum(stats.arrived)}<span>건</span></div>
-          </div>
-          <div class="inventory-summary-card">
-            <div class="summary-label">계근·검사 진행</div>
-            <div class="summary-value">${formatNum(stats.pending)}<span>건</span></div>
-          </div>
-          <div class="inventory-summary-card ${stats.hold + stats.rejected > 0 ? 'summary-risk' : ''}">
-            <div class="summary-label">보류·반려</div>
-            <div class="summary-value">${formatNum(stats.hold + stats.rejected)}<span>건</span></div>
-          </div>
-        </div>
-
-        ${renderTable(list)}
-      </div>
-
+  // 입고예정 등록·QR 모달 — 화면은 QR 입고배정 현황(dashboard.js)에 합쳤고, 그쪽이 이 모달을 함께 그린다
+  const modals = () => `
       <div class="modal-overlay" id="supplier-inbound-modal">
         <div class="modal modal-xl">
           <div class="modal-header">
@@ -102,64 +40,6 @@ const SupplierInboundPage = (() => {
         </div>
       </div>
     `;
-  };
-
-  const renderTable = (list) => {
-    if (list.length === 0) return `
-      <div class="empty-state">
-        <div class="empty-icon"></div>
-        <h3>협력사 입고예정이 없습니다</h3>
-        <p>납품 전에 협력사, 원료, 예정중량을 입력하면 QR 라벨이 생성됩니다</p>
-        <button class="btn btn-primary mt-12" onclick="SupplierInboundPage.openAddModal()">＋ 입고예정 등록</button>
-      </div>`;
-
-    return `
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>입고예정번호</th>
-              <th>협력사</th>
-              <th>원료</th>
-              <th>LOT</th>
-              <th>입고공장</th>
-              <th>납품예정일</th>
-              <th>차량번호</th>
-              <th class="td-right">예정중량</th>
-              <th>QR</th>
-              <th>상태</th>
-              <th>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${list.map(r => `
-              <tr>
-                <td><span class="td-mono text-xs">${escapeText(r.preRegId || r.id)}</span></td>
-                <td>
-                  <strong>${escapeText(supplierName(r))}</strong>
-                  <div class="text-xs text-muted">${escapeText(r.contact || '')}</div>
-                </td>
-                <td>
-                  <strong>${escapeText(r.materialName)}</strong>
-                  <div class="td-mono text-xs text-muted">${escapeText(r.materialCode)}</div>
-                </td>
-                <td><span class="td-mono text-xs">${escapeText(r.lotNo || '-')}</span></td>
-                <td>${escapeText(DB.getFactoryName(r.factory))} <span class="td-mono text-xs">(${escapeText(DB.getFactoryLotCode?.(r.factory) || r.factoryLotCode || '-')})</span></td>
-                <td>${escapeText(r.receivedDate || '-')}</td>
-                <td>${escapeText(r.vehicleNo || '-')}</td>
-                <td class="td-right font-bold">${formatNum(r.expectedWeight)}kg</td>
-                <td>
-                  <button class="btn btn-ghost btn-sm btn-icon" title="QR 보기" onclick="SupplierInboundPage.showQR('${r.id}')">QR</button>
-                  ${r.qrPrintCount ? `<div class="text-xs text-muted">${r.qrPrintCount}회</div>` : ''}
-                </td>
-                <td>${statusBadge(r.status)}</td>
-                <td><div style="display:flex;gap:6px;flex-wrap:wrap">${renderActions(r)}</div></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  };
 
   const renderActions = (r) => {
     const buttons = [];
@@ -273,7 +153,7 @@ const SupplierInboundPage = (() => {
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="SupplierInboundPage.closeModal('supplier-inbound-modal')">취소</button>
-        <button class="btn btn-primary" onclick="SupplierInboundPage.submitNotice()">QR 발행</button>
+        <button class="btn btn-primary" onclick="SupplierInboundPage.submitNotice()">${QR_ON ? 'QR 발행' : '입고예정 등록'}</button>
       </div>
     `;
     if (prefillSupplierId) setTimeout(() => selectSupplier(prefillSupplierId), 50);
@@ -408,11 +288,11 @@ const SupplierInboundPage = (() => {
         attachmentNote: document.getElementById('sin-attachment-note').value
       });
       closeModal('supplier-inbound-modal');
-      App.toast('협력사 입고예정 QR이 발행되었습니다', 'success');
+      App.toast(QR_ON ? '협력사 입고예정 QR이 발행되었습니다' : '입고예정이 등록되었습니다', 'success');
       App.refreshPage();
-      setTimeout(() => showQR(item.id), 250);
+      if (QR_ON) setTimeout(() => showQR(item.id), 250);
     } catch (e) {
-      App.toast('QR 발행 실패: ' + e.message, 'error');
+      App.toast((QR_ON ? 'QR 발행 실패: ' : '입고예정 등록 실패: ') + e.message, 'error');
     }
   };
 
@@ -497,7 +377,7 @@ const SupplierInboundPage = (() => {
   };
 
   const reject = (receivingId) => {
-    const reason = prompt('반려 사유를 입력하세요', 'QR/실물 정보 불일치');
+    const reason = prompt('반려 사유를 입력하세요', QR_ON ? 'QR/실물 정보 불일치' : '송장/실물 정보 불일치');
     if (reason === null) return;
     try {
       DB.processSupplierInbound(receivingId, 'REJECT', { reason, actor: '현장' });
@@ -516,8 +396,8 @@ const SupplierInboundPage = (() => {
   const closeModal = (id) => document.getElementById(id)?.classList.remove('open');
 
   return {
-    render,
-    afterRender: () => {},
+    modals,
+    renderActions,
     openAddModal,
     onSupplierSearch,
     selectSupplier,

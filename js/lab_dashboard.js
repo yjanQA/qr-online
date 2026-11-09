@@ -248,7 +248,7 @@ const LabDashboardPage = (() => {
       pushCard({ label: 'VOC 미처리', value: voc + '건', sub: '고객불만·클레임', tone: voc > 0 ? 'danger' : 'ok', page: 'voc', scope: 'all' });
       if (voc > 0) pushAlert({ icon: '', domain: 'VOC', text: `미처리 클레임 ${voc}건`, tone: 'danger', page: 'voc' });
       const exc = N(s.exceptionCount);
-      if (exc > 0) pushAlert({ icon: '', domain: '이상관리', text: `미해결 QR·중량 이상 ${exc}건`, tone: 'warn', page: 'quality' });
+      if (exc > 0) pushAlert({ icon: '', domain: '이상관리', text: `미해결 ${QR_ON ? 'QR' : '입고'}·중량 이상 ${exc}건`, tone: 'warn', page: 'quality' });
     } catch (_) {}
 
     // CCP 한계이탈(오늘) — DB.getCCPStatus(공장)

@@ -10,7 +10,7 @@ const ReceivingPage = (() => {
 
   const statusBadge = (status) => {
     const map = {
-      QR_ISSUED:        `<span class="badge badge-info">QR발행</span>`,
+      QR_ISSUED:        `<span class="badge badge-info">${QR_ON ? 'QR발행' : '입고예정'}</span>`,
       ARRIVED:          `<span class="badge badge-warning">도착확인</span>`,
       PENDING_SCALE:    `<span class="badge badge-warning">계근대기</span>`,
       PENDING_QC:       `<span class="badge badge-info">검사대기</span>`,
@@ -39,9 +39,10 @@ const ReceivingPage = (() => {
               계근 처리
               ${pendingScale.length > 0 ? `<span class="nav-badge">${pendingScale.length}</span>` : ''}
             </button>
-            <button class="btn btn-primary" onclick="ReceivingPage.openAddModal()">
+            <button class="btn btn-outline-primary" onclick="ReceivingPage.openAddModal()">
               ＋ 입고 등록
             </button>
+            <button class="btn btn-primary" onclick="InvoiceScan.open()">송장 스캔 입고</button>
           </div>
         </div>
 
@@ -123,7 +124,7 @@ const ReceivingPage = (() => {
               const weighing = DB.getWeighingByReceivingId(r.id);
               return `
               <tr>
-                <td><span class="td-mono">${r.id.slice(0,16)}...</span></td>
+                <td><span class="td-mono">${recvNo(r).slice(0,16)}</span></td>
                 <td><span class="td-mono">${r.materialCode}</span></td>
                 <td><strong>${r.materialName}</strong></td>
                 <td>${r.supplierName || r.supplier || '-'}</td>
@@ -142,7 +143,7 @@ const ReceivingPage = (() => {
                 <td>${statusBadge(r.status)}</td>
                 <td>
                   <div style="display:flex;gap:6px">
-                    <button class="btn btn-ghost btn-sm btn-icon" title="QR 보기" onclick="ReceivingPage.showQR('${r.id}')">QR</button>
+                    <button class="btn btn-ghost btn-sm btn-icon qr-only" title="QR 보기" onclick="ReceivingPage.showQR('${r.id}')">QR</button>
                     ${r.status === 'QR_ISSUED' || r.status === 'ARRIVED' || r.status === 'PENDING_SCALE' || r.status === 'PENDING_APPROVAL' ?
                       `<button class="btn btn-warning btn-sm" onclick="ReceivingPage.openWeighModal('${r.id}')">계근</button>` : ''}
                     ${r.status === 'PENDING_QC' || r.status === 'APPROVED' ?
@@ -254,7 +255,7 @@ const ReceivingPage = (() => {
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="ReceivingPage.closeModal('add-modal')">취소</button>
-        <button class="btn btn-primary" onclick="ReceivingPage.submitAdd()">등록 및 QR 생성</button>
+        <button class="btn btn-primary" onclick="ReceivingPage.submitAdd()">${QR_ON ? '등록 및 QR 생성' : '입고 등록'}</button>
       </div>
     `;
     if (prefillSupplierId) {
@@ -394,8 +395,8 @@ const ReceivingPage = (() => {
         memo: document.getElementById('memo').value
       });
       closeModal('add-modal');
-      App.toast('입고 등록 완료! QR 라벨을 출력하세요.', 'success');
-      setTimeout(() => showQR(item.id), 300);
+      App.toast(QR_ON ? '입고 등록 완료! QR 라벨을 출력하세요.' : '입고 등록 완료. 다음은 계근입니다', 'success');
+      if (QR_ON) setTimeout(() => showQR(item.id), 300);
       App.refreshPage();
     } catch (e) {
       App.toast('등록 실패: ' + e.message, 'error');
@@ -540,6 +541,7 @@ const ReceivingPage = (() => {
 
   // 계근 대기 스캔 처리
   const openScanWeighModal = () => {
+    if (!QR_ON) { switchTab('scale'); return; }   // QR 을 숨긴 동안에는 계근 대기 목록으로 간다
     App.navigate('scan');
   };
 

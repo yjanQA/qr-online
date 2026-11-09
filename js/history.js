@@ -27,14 +27,14 @@ const HistoryPage = (() => {
         <!-- QR 스캔 조회 -->
         <div class="card mb-20">
           <div class="card-header">
-            <div class="card-title"><span class="icon"></span> QR 코드로 이력 조회</div>
-            <button class="btn btn-${scanActive ? 'danger' : 'primary'} btn-sm"
+            <div class="card-title"><span class="icon"></span> ${QR_ON ? 'QR 코드로 이력 조회' : '이력 조회'}</div>
+            <button class="btn btn-${scanActive ? 'danger' : 'primary'} btn-sm qr-only"
               id="scan-toggle-btn"
               onclick="HistoryPage.toggleScan()">
               ${scanActive ? '스캔 중지' : '스캔 시작'}
             </button>
           </div>
-          <div id="qr-scan-area" class="qr-scan-area ${scanActive ? 'scanning' : ''}">
+          <div id="qr-scan-area" class="qr-scan-area qr-only ${scanActive ? 'scanning' : ''}">
             <div id="qr-reader"></div>
             ${!scanActive ? `
               <span class="scan-icon"></span>
@@ -42,7 +42,7 @@ const HistoryPage = (() => {
               <div class="text-sm text-muted mb-16">카메라를 QR코드에 가까이 대세요</div>
             ` : ''}
           </div>
-          <div class="scan-fallback-panel">
+          <div class="scan-fallback-panel qr-only">
             <label class="btn btn-outline-primary btn-sm">
               사진으로 QR 읽기
               <input type="file" accept="image/*" capture="environment" class="hidden"
@@ -52,7 +52,7 @@ const HistoryPage = (() => {
           </div>
           <!-- 수동 입력 -->
           <div class="flex gap-8 mt-12">
-            <input type="text" class="form-input" id="manual-id" placeholder="QR · 코드 · 이름(제품·원료·협력사) · 제품LOT · 입고번호 · 차량번호" style="flex:1"
+            <input type="text" class="form-input" id="manual-id" placeholder="${QR_ON ? 'QR · ' : ''}코드 · 이름(제품·원료·협력사) · 제품LOT · 입고번호 · 차량번호" style="flex:1"
               onkeydown="if(event.key==='Enter'){event.preventDefault();HistoryPage.searchById(this.value)}">
             <button class="btn btn-ghost" onclick="HistoryPage.searchById(document.getElementById('manual-id').value)">조회</button>
           </div>
@@ -131,7 +131,7 @@ const HistoryPage = (() => {
     const materials = (DB.getMaterials() || []).filter(m => has(m.code, m.name));
     const suppliers = (DB.getSuppliers() || []).filter(x => has(x.code, x.name, x.mainItem));
     const lots = (DB.getProductLots() || []).filter(l => has(l.fgLotNo, l.productName, l.productCode));
-    const recvs = (DB.getReceivings() || []).filter(r => has(r.preRegId, r.lotNo, r.materialName, r.materialCode, r.vehicleNo, r.supplierName || r.supplier));
+    const recvs = (DB.getReceivings() || []).filter(r => has(r.preRegId, r.lotNo, r.supplierLot, r.invoiceNo, r.materialName, r.materialCode, r.vehicleNo, r.supplierName || r.supplier));
     const groups = [
       { type: 'product', label: '제품', all: products.length, rows: cap(products).map(p => ({ id: p.code, main: p.name, sub: `${p.code}${p.formulaCode ? ' · 배합비 ' + p.formulaCode : ''}` })) },
       { type: 'lot', label: '제품 LOT', all: lots.length, rows: cap(lots.slice().reverse()).map(l => ({ id: l.fgLotNo || l.id, main: `${l.productName} · ${l.fgLotNo}`, sub: `${DB.getFactoryName(l.factory)} · 생산 ${l.productionDate || '-'} · ${formatNum(l.qty)}kg` })) },
@@ -220,7 +220,7 @@ const HistoryPage = (() => {
       resultEl.innerHTML = `
         <div class="card mb-20" style="border-color:var(--danger)">
           <div class="text-danger font-bold">찾는 항목이 없습니다</div>
-          <div class="text-sm text-muted mt-4">검색어: ${esc(qid)} — QR·코드, 제품·원료·협력사 이름, 제품LOT, 입고번호·LOT, 차량번호로 찾을 수 있습니다(2글자 이상).</div>
+          <div class="text-sm text-muted mt-4">검색어: ${esc(qid)} — ${QR_ON ? 'QR·' : ''}코드, 제품·원료·협력사 이름, 제품LOT, 입고번호·LOT, 차량번호로 찾을 수 있습니다(2글자 이상).</div>
         </div>`;
       return;
     }
@@ -304,8 +304,8 @@ const HistoryPage = (() => {
           ${receiving.status === 'APPROVED' ? `<button class="btn btn-success btn-block" onclick="ReceivingPage.registerStock('${receiving.id}')">재고 등록</button>` : ''}
           ${['QR_ISSUED','ARRIVED','PENDING_SCALE','PENDING_QC','PENDING_APPROVAL','HOLD'].includes(receiving.status) ? `<button class="btn btn-ghost btn-block" onclick="HistoryPage.processInbound('${receiving.id}','HOLD')">보류</button>` : ''}
           ${['QR_ISSUED','ARRIVED','PENDING_SCALE','PENDING_QC','PENDING_APPROVAL','HOLD'].includes(receiving.status) ? `<button class="btn btn-danger btn-block" onclick="HistoryPage.processInbound('${receiving.id}','REJECT')">반려</button>` : ''}
-          ${receiving.status === 'IN_STOCK' ? `<div class="info-box info-green" style="width:100%">이미 입고 완료된 QR입니다. 중복 입고 처리는 차단됩니다.</div><button class="btn btn-outline-primary btn-block" onclick="App.navigate('outbound','${receiving.materialCode}')">출고 처리</button>` : ''}
-          ${receiving.status === 'REJECTED' ? `<div class="info-box info-warning" style="width:100%">반려 처리된 QR입니다. 같은 라벨로 입고할 수 없습니다.</div>` : ''}
+          ${receiving.status === 'IN_STOCK' ? `<div class="info-box info-green" style="width:100%">이미 입고 완료된 ${QR_ON ? 'QR' : '건'}입니다. 중복 입고 처리는 차단됩니다.</div><button class="btn btn-outline-primary btn-block" onclick="App.navigate('outbound','${receiving.materialCode}')">출고 처리</button>` : ''}
+          ${receiving.status === 'REJECTED' ? `<div class="info-box info-warning" style="width:100%">반려 처리된 ${QR_ON ? 'QR' : '건'}입니다. 같은 라벨로 입고할 수 없습니다.</div>` : ''}
         </div>
 
         ${forwardFromReceivingHtml(receiving)}
@@ -336,7 +336,7 @@ const HistoryPage = (() => {
       <div class="qr-info-card mb-20 fade-in">
         <div class="qr-info-header">
           <h1>${material.name}</h1>
-          <p>원료코드: ${material.code} · QR: ${material.qrCode}</p>
+          <p>원료코드: ${material.code}${QR_ON ? ` · QR: ${material.qrCode}` : ''}</p>
         </div>
         <div class="qr-master-grid">
           <div class="qr-master-preview"><div id="master-qr-preview"></div></div>
@@ -357,7 +357,7 @@ const HistoryPage = (() => {
               <tbody>
                 ${receivings.length === 0 ? `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px">입고 이력 없음</td></tr>` :
                 receivings.map(r => `<tr style="cursor:pointer" onclick="HistoryPage.open('recv','${jsq(r.id)}')">
-                  <td><span class="td-mono text-xs">${r.preRegId || r.id}</span></td>
+                  <td><span class="td-mono text-xs">${recvNo(r)}</span></td>
                   <td>${r.supplierName || r.supplier || '-'}</td>
                   <td>${r.lotNo || '-'}</td>
                   <td class="td-right">${formatNum(r.actualWeight || r.expectedWeight)}kg</td>
@@ -378,7 +378,7 @@ const HistoryPage = (() => {
       <div class="qr-info-card mb-20 fade-in">
         <div class="qr-info-header">
           <h1>${product.name}</h1>
-          <p>제품코드: ${product.code} · 배합비: ${product.formulaCode || '-'} · QR: ${product.qrCode}</p>
+          <p>제품코드: ${product.code} · 배합비: ${product.formulaCode || '-'} ${QR_ON ? `· QR: ${product.qrCode}` : ''}</p>
         </div>
         <div class="qr-master-grid">
           <div class="qr-master-preview"><div id="master-qr-preview"></div></div>
@@ -427,7 +427,7 @@ const HistoryPage = (() => {
         <div class="qr-master-grid">
           <div class="qr-master-preview"><div id="master-qr-preview"></div></div>
           <div class="qr-info-section">
-            <h3>제품 LOT QR</h3>
+            <h3>${QR_ON ? '제품 LOT QR' : '제품 LOT'}</h3>
             <div class="qr-info-row"><span class="label">제품 마스터</span><span class="value">${product?.name || '-'}</span></div>
             <div class="qr-info-row"><span class="label">공장</span><span class="value">${DB.getFactoryName(lot.factory)}</span></div>
             <div class="qr-info-row"><span class="label">수량</span><span class="value">${formatNum(lot.qty)}kg</span></div>
@@ -460,7 +460,7 @@ const HistoryPage = (() => {
       <div class="qr-info-card mb-20 fade-in">
         <div class="qr-info-header">
           <h1>${supplier.name}</h1>
-          <p>협력사코드: ${supplier.code} · QR: ${qrValue}</p>
+          <p>협력사코드: ${supplier.code}${QR_ON ? ` · QR: ${qrValue}` : ''}</p>
         </div>
         <div class="qr-master-grid">
           <div class="qr-master-preview"><div id="master-qr-preview"></div></div>
@@ -502,7 +502,7 @@ const HistoryPage = (() => {
               <tbody>
                 ${receivings.length === 0 ? `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px">아직 이 협력사의 입고 이력이 없습니다</td></tr>` :
                 receivings.map(r => `<tr>
-                  <td><span class="td-mono text-xs">${r.preRegId || r.id}</span></td>
+                  <td><span class="td-mono text-xs">${recvNo(r)}</span></td>
                   <td>${r.materialName}</td>
                   <td>${r.lotNo || '-'}</td>
                   <td class="td-right">${formatNum(r.actualWeight || r.expectedWeight)}kg</td>
@@ -661,7 +661,7 @@ const HistoryPage = (() => {
 
   const getStatusBadge = (status) => {
     const map = {
-      QR_ISSUED:        '<span class="badge badge-info">QR발행</span>',
+      QR_ISSUED:        `<span class="badge badge-info">${QR_ON ? 'QR발행' : '입고예정'}</span>`,
       ARRIVED:          '<span class="badge badge-warning">도착확인</span>',
       PENDING_SCALE:    '<span class="badge badge-warning">계근대기</span>',
       PENDING_QC:       '<span class="badge badge-info">검사대기</span>',
@@ -682,7 +682,7 @@ const HistoryPage = (() => {
       if (reason === null) return;
     }
     if (action === 'REJECT') {
-      reason = prompt('반려 사유를 입력하세요', 'QR/실물 정보 불일치');
+      reason = prompt('반려 사유를 입력하세요', QR_ON ? 'QR/실물 정보 불일치' : '송장/실물 정보 불일치');
       if (reason === null) return;
     }
     try {

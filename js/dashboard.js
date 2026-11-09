@@ -1,10 +1,12 @@
 // ============================================================
-// dashboard.js — QR 입고배정 현황 대시보드 (PPT 이미지 재현)
+// dashboard.js — QR 입고배정 현황 (입고 현황 + 협력사 입고예정 등록·QR 통합)
+//   2026-11-06 협력사 입고예정 화면을 여기로 합쳤다. 같은 입고 기록(rm_receiving)을 보는 화면이라
+//   등록·QR·도착·보류·반려는 SupplierInboundPage 의 기능을 그대로 불러 쓴다.
 // ============================================================
 
 const DashboardPage = (() => {
-  let charts = {};
   let searchVehicle = '';
+  let view = 'open';     // open(진행 중) | all(전체)
 
   // ── QR 상태 배지 ──
   const qrStatusBadge = (r) => {
@@ -21,6 +23,8 @@ const DashboardPage = (() => {
       PENDING_QC:       `<span class="status-pill pill-info">계근완료</span>`,
       PENDING_APPROVAL: `<span class="status-pill pill-error">확인필요</span>`,
       APPROVED:         `<span class="status-pill pill-pass">승인완료</span>`,
+      QR_ISSUED:        `<span class="status-pill pill-warn">${QR_ON ? 'QR발행' : '입고예정'}</span>`,
+      ARRIVED:          `<span class="status-pill pill-info">도착확인</span>`,
       IN_STOCK:         `<span class="status-pill pill-done">입고확정</span>`,
       HOLD:             `<span class="status-pill pill-hold">보류</span>`,
       REJECTED:         `<span class="status-pill pill-fail">부적합</span>`,
@@ -28,20 +32,34 @@ const DashboardPage = (() => {
     return map[status] || `<span class="status-pill">${status}</span>`;
   };
 
+  // 진행 중 = 입고 처리가 끝나지 않은 건. 납품일이 며칠 뒤인 QR 발행 건도 여기 포함된다.
+  const OPEN_STATUS = ['QR_ISSUED', 'ARRIVED', 'PENDING_SCALE', 'PENDING_QC', 'PENDING_APPROVAL', 'APPROVED', 'HOLD'];
+
+  // 입고 표 액션 — 도착·계근·검사·입고·보류·반려는 협력사 입고예정의 동작을 그대로 쓴다
+  const rowActions = (r) => {
+    if (['IN_STOCK', 'REJECTED', 'CANCELLED'].includes(r.status)) {
+      return r.isTemporary || !QR_ON ? '' : `<button class="btn btn-ghost btn-xs" onclick="SupplierInboundPage.showQR('${r.id}')">QR</button>`;
+    }
+    const acts = SupplierInboundPage.renderActions(r).replace(/btn-sm/g, 'btn-xs');
+    const qr = r.isTemporary || !QR_ON ? '' : `<button class="btn btn-ghost btn-xs" onclick="SupplierInboundPage.showQR('${r.id}')">QR</button>`;
+    const silo = r.status === 'APPROVED' && !r.siloId ? `<button class="btn btn-success btn-xs" onclick="App.navigate('silo')">배정</button>` : '';
+    return qr + acts + silo;
+  };
+
   const render = () => {
     const factory = App.getFactory();
     const stats   = DB.getStats(factory !== 'ALL' ? factory : null);
-    const silos   = factory !== 'ALL' ? DB.getSilosByFactory(factory) : DB.getSilos().slice(0,6);
     const allReceivings = DB.getReceivings()
       .filter(r => factory === 'ALL' || r.factory === factory)
       .slice().reverse();
     const todayReceivings = allReceivings.filter(r => {
-      const today = new Date().toISOString().split('T')[0];
-      return r.receivedDate === today || ['PENDING_SCALE','PENDING_QC','PENDING_APPROVAL'].includes(r.status);
+      const today = new Date().toLocaleDateString('sv-SE');   // 현지 날짜(UTC 로 자르면 오전 9시 전엔 어제가 된다)
+      return r.receivedDate === today || OPEN_STATUS.includes(r.status);
     });
+    // 검색은 끝난 입고건까지 찾는다 — 진행 중 목록에서만 찾으면 지난 차량이 안 나온다
     const filtered = searchVehicle
-      ? todayReceivings.filter(r => r.vehicleNo?.includes(searchVehicle) || r.supplierName?.includes(searchVehicle) || r.materialName?.includes(searchVehicle) || r.preRegId?.includes(searchVehicle))
-      : todayReceivings;
+      ? allReceivings.filter(r => r.vehicleNo?.includes(searchVehicle) || r.supplierName?.includes(searchVehicle) || r.materialName?.includes(searchVehicle) || r.preRegId?.includes(searchVehicle))
+      : (view === 'all' ? allReceivings : todayReceivings);
 
     const scanRate = stats.todayReceivingCount > 0
       ? Math.round((stats.scannedCount / stats.todayReceivingCount) * 100) : 0;
@@ -49,22 +67,22 @@ const DashboardPage = (() => {
     return `
       <div class="fade-in">
 
-        <!-- ── 6개 KPI 카드 (PPT 이미지 기준) ── -->
-        <div class="kpi-grid-6 mb-20">
+        <!-- ── 입고 KPI 카드 ── -->
+        <div class="kpi-grid-6 kpi-grid-5 mb-20">
 
           <div class="kpi6 kpi6-blue" onclick="App.navigate('receiving')">
             <div class="kpi6-label">오늘 입고예정</div>
             <div class="kpi6-value">${stats.todayReceivingCount}<span class="kpi6-unit">건</span></div>
             <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-blue" style="width:100%"></div></div>
-            <div class="kpi6-sub">${formatNum(stats.todayReceivingTon)} ton</div>
+            <div class="kpi6-sub">${formatNum(Math.round(stats.todayReceivingTon / 100) / 10)} ton</div>
           </div>
-          <div class="kpi6 kpi6-green" onclick="App.navigate('receiving')">
+          <div class="kpi6 kpi6-green qr-only" onclick="App.navigate('receiving')">
             <div class="kpi6-label">QR 스캔완료</div>
             <div class="kpi6-value">${stats.scannedCount}<span class="kpi6-unit">건</span></div>
             <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-green" style="width:${scanRate}%"></div></div>
             <div class="kpi6-sub">${scanRate}%</div>
           </div>
-          <div class="kpi6 kpi6-orange" onclick="App.navigate('receiving')">
+          <div class="kpi6 kpi6-orange qr-only" onclick="App.navigate('receiving')">
             <div class="kpi6-label">남은 미스캔</div>
             <div class="kpi6-value">${stats.missScanCount}<span class="kpi6-unit">건</span></div>
             <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-orange" style="width:${stats.todayReceivingCount>0?Math.round(stats.missScanCount/stats.todayReceivingCount*100):0}%"></div></div>
@@ -76,66 +94,29 @@ const DashboardPage = (() => {
             <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-teal" style="width:100%"></div></div>
             <div class="kpi6-sub">LOT 생성됨</div>
           </div>
-          <div class="kpi6 kpi6-purple" onclick="App.navigate('silo')">
-            <div class="kpi6-label">사일로 배정대기</div>
-            <div class="kpi6-value">${stats.siloWaitingCount}<span class="kpi6-unit">건</span></div>
-            <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-purple" style="width:${stats.siloWaitingCount>0?60:0}%"></div></div>
-            <div class="kpi6-sub">위치 선택</div>
-          </div>
           <div class="kpi6 ${stats.exceptionCount>0?'kpi6-red':'kpi6-gray'}" onclick="showExceptions()">
-            <div class="kpi6-label">QR 예외처리</div>
+            <div class="kpi6-label">${QR_ON ? 'QR 예외처리' : '입고 예외처리'}</div>
             <div class="kpi6-value">${stats.exceptionCount}<span class="kpi6-unit">건</span></div>
             <div class="kpi6-bar"><div class="kpi6-fill kpi6-fill-red" style="width:${stats.exceptionCount>0?80:0}%"></div></div>
             <div class="kpi6-sub">로그 저장</div>
           </div>
         </div>
 
-        <!-- ── 사일로 미니 현황 ── -->
-        <div class="card mb-20">
-          <div class="card-header">
-            <div class="card-title"><span class="icon"></span> 사일로 현황 요약</div>
-            <button class="btn btn-ghost btn-sm" onclick="App.navigate('silo')">전체보기 →</button>
-          </div>
-          <div class="silo-mini-grid">
-            ${silos.slice(0,6).map(silo => {
-              const sum = DB.getSiloCapacitySummary(silo);
-              const statusColor = sum.status === 'FULL' ? '#ef4444' : sum.status === 'LOW' ? '#f59e0b' : sum.status === 'AVAILABLE' ? '#10b981' : '#475569';
-              const statusText  = { FULL:'가득', AVAILABLE:'사용가능', LOW:'재고부족', EMPTY:'비어있음' }[sum.status] || sum.status;
-              return `
-              <div class="silo-mini-card" onclick="App.navigate('silo')">
-                <div class="silo-mini-header">
-                  <div class="silo-mini-name">${silo.name.replace('사일로','').trim()}</div>
-                  <div class="silo-mini-badge" style="color:${statusColor}">${statusText}</div>
-                </div>
-                <div class="silo-mini-gauge">
-                  <div class="silo-mini-bar">
-                    <div class="silo-mini-fill" style="width:${sum.pct}%;background:${statusColor}"></div>
-                  </div>
-                  <div class="silo-mini-pct">${sum.pct}%</div>
-                </div>
-                <div class="silo-mini-detail">
-                  <span>${silo.materialName}</span>
-                  <span>${formatNum(sum.totalQty)}kg</span>
-                </div>
-                <div class="silo-mini-lots">
-                  ${(silo.currentLots || []).map(l => `<span class="silo-lot-chip">${l.lotNo}: ${formatNum(l.qty)}kg</span>`).join('')}
-                </div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
-
         <!-- ── 입고예정·입고내역 테이블 ── -->
-        <div class="card">
+        <div class="card mb-20">
           <div class="card-header">
             <div>
               <div class="card-title"><span class="icon"></span> 입고예정·입고내역</div>
-              <div class="text-xs text-muted mt-2">QR은 예정정보이고, 우성 계근값 입력 후 입고확정됩니다</div>
+              <div class="text-xs text-muted mt-2">${QR_ON ? 'QR은 예정정보이고' : '송장은 예정정보이고'}, 우성 계근값 입력 후 입고확정됩니다</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn ${view === 'open' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="DashboardPage.setView('open')">진행 중 ${todayReceivings.length}</button>
+              <button class="btn ${view === 'all' ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="DashboardPage.setView('all')">전체 ${allReceivings.length}</button>
               <button class="btn btn-outline-primary btn-sm" onclick="searchByVehicle()">차량번호 검색</button>
-              <button class="btn btn-ghost btn-sm" onclick="openTempReceiving()">QR 없이 임시 입고</button>
-              <button class="btn btn-primary btn-sm" onclick="App.navigate('scan')">QR 스캔</button>
+              <button class="btn btn-ghost btn-sm" onclick="openTempReceiving()">${QR_ON ? 'QR 없이 임시 입고' : '임시 입고'}</button>
+              <button class="btn btn-ghost btn-sm qr-only" onclick="App.navigate('scan')">QR 스캔</button>
+              <button class="btn btn-outline-primary btn-sm" onclick="SupplierInboundPage.openAddModal()">＋ 입고예정 등록</button>
+              <button class="btn btn-primary btn-sm" onclick="InvoiceScan.open()">송장 스캔 입고</button>
             </div>
           </div>
 
@@ -149,8 +130,8 @@ const DashboardPage = (() => {
           ${filtered.length === 0 ? `
             <div class="empty-state">
               <div class="empty-icon"></div>
-              <h3>오늘 입고 예정이 없습니다</h3>
-              <p>입고 등록을 시작해보세요</p>
+              <h3>${searchVehicle ? '검색 결과가 없습니다' : '진행 중인 입고가 없습니다'}</h3>
+              <p>${QR_ON ? '납품 전에 협력사, 원료, 예정중량을 입력하면 QR 라벨이 생성됩니다' : '송장을 스캔하거나 입고예정을 등록하세요'}</p>
             </div>
           ` : `
           <div class="table-wrapper">
@@ -158,9 +139,10 @@ const DashboardPage = (() => {
               <thead>
                 <tr>
                   <th>사전입고번호</th>
-                  <th>QR 상태</th>
-                  <th>스캔</th>
+                  <th class="qr-only">QR 상태</th>
+                  <th class="qr-only">스캔</th>
                   <th>협력사</th>
+                  <th>납품예정일</th>
                   <th>차량번호</th>
                   <th>원료코드 / 명칭</th>
                   <th class="td-right">예정중량</th>
@@ -172,10 +154,11 @@ const DashboardPage = (() => {
               <tbody>
                 ${filtered.map(r => `
                 <tr class="receiving-row ${r.status==='PENDING_APPROVAL'?'row-error':r.status==='REJECTED'?'row-rejected':''}" onclick="showReceivingDetail('${r.id}')">
-                  <td><span class="pre-reg-id">${r.preRegId || r.id.slice(0,20)}</span></td>
-                  <td>${qrStatusBadge(r)}</td>
-                  <td class="td-center"><span class="scan-count">${r.scanCount||0}회</span></td>
+                  <td><span class="pre-reg-id">${recvNo(r).slice(0,20)}</span></td>
+                  <td class="qr-only">${qrStatusBadge(r)}</td>
+                  <td class="td-center qr-only"><span class="scan-count">${r.scanCount||0}회</span></td>
                   <td>${r.supplierName || '-'}</td>
+                  <td class="text-xs">${r.receivedDate || '-'}</td>
                   <td><span class="vehicle-no">${r.vehicleNo || '-'}</span></td>
                   <td>
                     <span class="material-code">${r.materialCode}</span>
@@ -185,11 +168,7 @@ const DashboardPage = (() => {
                   <td class="td-right ${r.actualWeight?'':'text-muted'}">${r.actualWeight ? formatNum(r.actualWeight)+'kg' : '-'}</td>
                   <td>${inStatusBadge(r.status)}</td>
                   <td onclick="event.stopPropagation()">
-                    <div style="display:flex;gap:4px">
-                      ${r.status==='PENDING_SCALE'?`<button class="btn btn-warning btn-xs" onclick="App.navigate('receiving');setTimeout(()=>ReceivingPage.openWeighModal('${r.id}'),200)">계근</button>`:''}
-                      ${r.status==='PENDING_QC'?`<button class="btn btn-info btn-xs" onclick="App.navigate('quality')">검사</button>`:''}
-                      ${r.status==='APPROVED'&&!r.siloId?`<button class="btn btn-success btn-xs" onclick="App.navigate('silo')">배정</button>`:''}
-                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">${rowActions(r)}</div>
                   </td>
                 </tr>`).join('')}
               </tbody>
@@ -197,37 +176,11 @@ const DashboardPage = (() => {
           </div>`}
         </div>
 
-        <!-- ── 하단 — 차트 + 최근활동 ── -->
-        <div class="grid-2 mt-20">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><span class="icon"></span> 7일 품질 추이</div>
-            </div>
-            <div class="chart-wrapper"><canvas id="defectChart"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><span class="icon"></span> 최근 활동</div>
-              <button class="btn btn-ghost btn-sm" onclick="App.navigate('history')">전체보기</button>
-            </div>
-            <div class="timeline mt-4">
-              ${stats.recentActivity.length === 0
-                ? `<div class="empty-state"><div class="empty-icon"></div><h3>활동 이력 없음</h3></div>`
-                : stats.recentActivity.slice(0,8).map(a => `
-                  <div class="timeline-item">
-                    <div class="timeline-action">${typeIcon(a.refType)} ${a.action}</div>
-                    <div class="timeline-detail">${a.detail||''}</div>
-                    <div class="timeline-meta">${formatDate(a.timestamp)} · ${a.actor}</div>
-                  </div>`).join('')}
-            </div>
-          </div>
-        </div>
-
         <!-- 예외처리 모달 -->
         <div class="modal-overlay" id="exception-modal">
           <div class="modal modal-lg">
             <div class="modal-header">
-              <div class="modal-title">QR 예외처리 목록</div>
+              <div class="modal-title">${QR_ON ? 'QR 예외처리 목록' : '입고 예외처리 목록'}</div>
               <button class="modal-close" onclick="document.getElementById('exception-modal').classList.remove('open')">✕</button>
             </div>
             <div id="exception-modal-body"></div>
@@ -254,12 +207,14 @@ const DashboardPage = (() => {
         <div class="modal-overlay" id="temp-receiving-modal">
           <div class="modal">
             <div class="modal-header">
-              <div class="modal-title">QR 없이 임시 입고</div>
+              <div class="modal-title">${QR_ON ? 'QR 없이 임시 입고' : '임시 입고'}</div>
               <button class="modal-close" onclick="document.getElementById('temp-receiving-modal').classList.remove('open')">✕</button>
             </div>
             <div id="temp-receiving-body"></div>
           </div>
         </div>
+
+        ${SupplierInboundPage.modals()}
 
         <!-- 입고 상세 모달 -->
         <div class="modal-overlay" id="receiving-detail-modal">
@@ -276,14 +231,7 @@ const DashboardPage = (() => {
     `;
   };
 
-  const typeIcon = (type) => {
-    const m = { RECEIVING:'', WEIGHING:'', QC:'', INVENTORY:'', OUTBOUND:'', ADJUST:'', SILO:'', SILO_CONSUME:'', LOSS:'', PRODUCTION:'', BATCH:'', PRODUCT:'', VOC:'' };
-    return m[type] || '•';
-  };
-
   const afterRender = () => {
-    drawDefectChart();
-
     // KPI 카운터 애니메이션
     document.querySelectorAll('.kpi6-value').forEach(el => {
       el.classList.add('counting');
@@ -295,51 +243,15 @@ const DashboardPage = (() => {
     });
   };
 
-
-  const drawDefectChart = () => {
-    const ctx = document.getElementById('defectChart');
-    if (!ctx) return;
-    if (charts.defect) charts.defect.destroy();
-    const data = DB.getStats().last7DaysDefect;
-    charts.defect = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.map(d => d.date.slice(5)),
-        datasets: [{
-          label: '불량률(%)',
-          data: data.map(d => d.rate),
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239,68,68,0.1)',
-          fill: true, tension: 0.4, pointBackgroundColor: '#ef4444', pointRadius: 4
-        },{
-          label: '검사건수',
-          data: data.map(d => d.total),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59,130,246,0.1)',
-          fill: false, tension: 0.4, pointBackgroundColor: '#3b82f6', pointRadius: 4, yAxisID: 'y1'
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { color:'#94a3b8', font:{size:11} } } },
-        scales: {
-          x:  { ticks:{color:'#94a3b8',font:{size:11}}, grid:{color:'rgba(255,255,255,0.05)'} },
-          y:  { ticks:{color:'#94a3b8',font:{size:11}}, grid:{color:'rgba(255,255,255,0.05)'}, title:{display:true,text:'불량률(%)',color:'#94a3b8',font:{size:10}} },
-          y1: { position:'right', ticks:{color:'#94a3b8',font:{size:11}}, grid:{drawOnChartArea:false}, title:{display:true,text:'건수',color:'#94a3b8',font:{size:10}} }
-        }
-      }
-    });
-  };
-
   const clearSearch = () => { searchVehicle = ''; App.refreshPage(); };
+  const setView = (v) => { view = v; App.refreshPage(); };
 
   const doVehicleSearch = () => {
     const val = document.getElementById('vehicle-search-input')?.value.trim();
     if (val) { searchVehicle = val; document.getElementById('vehicle-search-modal').classList.remove('open'); App.refreshPage(); }
   };
 
-  return { render, afterRender, clearSearch, doVehicleSearch };
+  return { render, afterRender, clearSearch, doVehicleSearch, setView };
 })();
 
 // ── 전역 헬퍼 (HTML onclick에서 사용) ──
@@ -354,7 +266,7 @@ function showReceivingDetail(id) {
   body.innerHTML = `
     <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
       <div class="info-grid-2">
-        <div><div class="info-label">사전입고번호</div><div class="info-value font-mono">${r.preRegId||r.id}</div></div>
+        <div><div class="info-label">사전입고번호</div><div class="info-value font-mono">${recvNo(r)}</div></div>
         <div><div class="info-label">공장</div><div class="info-value">${DB.getFactoryName(r.factory)}</div></div>
         <div><div class="info-label">협력사</div><div class="info-value">${r.supplierName||'-'}</div></div>
         <div><div class="info-label">차량번호</div><div class="info-value">${r.vehicleNo||'-'}</div></div>
@@ -362,6 +274,9 @@ function showReceivingDetail(id) {
         <div><div class="info-label">LOT번호</div><div class="info-value font-mono">${r.lotNo||'-'}</div></div>
         <div><div class="info-label">예정중량</div><div class="info-value">${formatNum(r.expectedWeight)}kg</div></div>
         <div><div class="info-label">실측중량</div><div class="info-value">${r.actualWeight?formatNum(r.actualWeight)+'kg':'-'}</div></div>
+        ${r.supplierLot ? `<div><div class="info-label">협력사 LOT</div><div class="info-value font-mono">${r.supplierLot}</div></div>` : ''}
+        ${r.invoiceNo ? `<div><div class="info-label">송장번호</div><div class="info-value font-mono">${r.invoiceNo}</div></div>` : ''}
+        ${r.invoiceScan ? `<div><div class="info-label">스캔 원본</div><div class="info-value"><button class="btn btn-ghost btn-xs" onclick="PhotoStore.openViewer([DB.getReceivingById('${r.id}').invoiceScan], 0, {})">송장 보기</button></div></div>` : ''}
       </div>
       ${w ? `<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:12px">
         <div style="font-weight:600;margin-bottom:8px">계근 정보</div>
@@ -431,7 +346,7 @@ function openTempReceiving() {
   body.innerHTML = `
     <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
       <div class="info-box info-warning">
-        QR 미부착 차량 임시 등록입니다. 나중에 QR 스캔 후 연결합니다.
+        ${QR_ON ? 'QR 미부착 차량 임시 등록입니다. 나중에 QR 스캔 후 연결합니다.' : '송장 없이 들어온 차량의 임시 등록입니다.'}
       </div>
       <div class="form-group">
         <label class="form-label">사전입고번호 (자동생성)</label>

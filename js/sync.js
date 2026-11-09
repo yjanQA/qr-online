@@ -29,6 +29,8 @@ const Sync = (() => {
     'rm_submaterials', 'rm_sub_orders', 'rm_process_issues',
     // 제품 재고 적정성 기준(부족·과재고 기준 개월, 제품별 기준 출하량)
     'rm_stock_levels',
+    // 송장 스캔: 담당자가 고친 협력사·원료 표기
+    'rm_invoice_alias',
     // 품질 분석관리
     'lab_records', 'lab_specs', 'lab_items', 'lab_requests',
     'lab_haccp_docs', 'lab_haccp_ha', 'lab_haccp_logs', 'lab_newmat', 'lab_validations',

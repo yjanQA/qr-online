@@ -71,6 +71,7 @@ function vBadge(v){const m={OK:['적합','#0a7d28','#e3f7e8'],HIGH:['상한초�
 //   · 숫자칸: ↑↓ 스핀(증감) 차단하고 이전/다음 입력칸으로 이동, Enter도 다음 칸
 //   · 텍스트/날짜 등 한 줄 입력칸: ↑↓ 이동 (textarea·select·datalist 자동완성 칸은 제외)
 //   · 이동 범위: 같은 표 → 같은 모달(오버레이) → 페이지 본문 순으로 가장 가까운 영역
+//   · 표 안의 ↑↓: 엑셀처럼 같은 열의 위/아래 칸으로 이동(한 행에 입력칸이 여러 개인 표에서 옆 칸으로 새지 않게), 글자칸은 Enter 도 아래 칸
 (function(){
   if (typeof document === 'undefined' || window.__gridArrowNavBound) return;
   window.__gridArrowNavBound = true;
@@ -86,19 +87,54 @@ function vBadge(v){const m={OK:['적합','#0a7d28','#e3f7e8'],HIGH:['상한초�
     t.closest('.aned-overlay,.cmed-overlay,.coa-overlay,.modal,[class*="overlay"]') ||
     document.getElementById('page-content') || document.body;
 
+  // 표 안에서 같은 열의 위/아래 칸 찾기. 병합 셀이 있어도 맞도록 칸 번호가 아니라 화면 위치로 비교한다.
+  //   같은 셀에 칸이 여러 개면 그 셀 안에서 먼저 움직이고, 같은 열에 칸이 없으면 null(기존 순서 이동).
+  const verticalTarget = (t, down) => {
+    const table = t.closest('table');
+    const cell = t.closest('td,th');
+    const row = t.closest('tr');
+    if (!table || !cell || !row) return null;
+    const visible = (el) => isNavInput(el) && el.offsetParent !== null;
+    const sameCell = Array.from(cell.querySelectorAll('input')).filter(visible);
+    const inCell = sameCell[sameCell.indexOf(t) + (down ? 1 : -1)];
+    if (inCell) return inCell;
+    const box = t.getBoundingClientRect();
+    const cx = box.left + box.width / 2;
+    const rows = Array.from(table.rows);
+    for (let i = rows.indexOf(row) + (down ? 1 : -1); i >= 0 && i < rows.length; i += down ? 1 : -1) {
+      const hit = Array.from(rows[i].querySelectorAll('input')).filter(visible).find(el => {
+        const r = el.getBoundingClientRect();
+        return r.left <= cx && cx <= r.right;
+      });
+      if (hit) return hit;
+    }
+    return null;
+  };
+
   document.addEventListener('keydown', (e) => {
     const t = e.target;
     if (!isNavInput(t)) return;
     const isArrow = e.key === 'ArrowDown' || e.key === 'ArrowUp';
     const isEnter = e.key === 'Enter' && t.type === 'number';   // Enter 이동은 숫자칸만(검색창 등 Enter 동작 보존)
-    if (!isArrow && !isEnter) return;
+    // 표 본문의 글자칸 Enter = 같은 열 아래 칸. 칸마다 자체 Enter 동작이 있으면 건드리지 않는다.
+    const isTableEnter = e.key === 'Enter' && !isEnter && !!t.closest('tbody')
+      && !t.hasAttribute('onkeydown') && !t.hasAttribute('onkeypress') && !t.hasAttribute('onkeyup');
+    if (!isArrow && !isEnter && !isTableEnter) return;
     if (e.isComposing) return;             // 한글 조합 중에는 개입하지 않음
+    if (isTableEnter) {
+      const below = verticalTarget(t, true);
+      if (!below) return;                  // 아래 칸이 없으면 원래 Enter 동작 그대로
+      e.preventDefault();
+      below.focus(); if (below.select) below.select();
+      return;
+    }
     const scope = scopeOf(t);
     const inputs = Array.from(scope.querySelectorAll('input')).filter(i => isNavInput(i) && i.offsetParent !== null);
     const idx = inputs.indexOf(t);
     if (idx < 0) return;
     e.preventDefault();                    // 숫자 스핀·커서점프 차단
-    const next = (e.key === 'ArrowUp') ? inputs[idx - 1] : inputs[idx + 1];
+    const next = (isArrow && verticalTarget(t, e.key === 'ArrowDown'))
+      || ((e.key === 'ArrowUp') ? inputs[idx - 1] : inputs[idx + 1]);
     if (next) { next.focus(); if (next.select) next.select(); }
   }, true);
 

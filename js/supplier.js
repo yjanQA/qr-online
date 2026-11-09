@@ -228,7 +228,7 @@ const SupplierPage = (() => {
         <div class="supplier-card-head" onclick="SupplierPage.showFullDetail('${s.id}')" title="클릭하면 전체 정보·이력을 봅니다">
           <div class="font-bold text-lg">${escapeText(s.name)} <span class="supplier-detail-hint">상세 ›</span></div>
           <div class="text-xs text-muted">${escapeText(s.code)} · ${escapeText(s.domesticImport||'-')} · ${escapeText(s.industry||'-')}</div>
-          <div class="text-xs text-muted td-mono mt-4">${escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code))}</div>
+          <div class="text-xs text-muted td-mono mt-4 qr-only">${escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code))}</div>
           ${s.businessNo ? `<div class="text-xs text-muted td-mono mt-4">사업자 ${escapeText(s.businessNo)}</div>` : ''}
         </div>
         <span class="badge ${s.haccpGrade==='A'?'badge-pass':s.haccpGrade==='B'?'badge-info':s.haccpGrade?'badge-warning':'badge-default'}">${escapeText(s.haccpGrade || s.status || '활성')}</span>
@@ -282,7 +282,7 @@ const SupplierPage = (() => {
         </div>`;
       })()}
       <div class="flex gap-8 mt-12">
-        <button class="btn btn-ghost btn-sm" onclick="SupplierPage.showQR('${s.id}')">QR</button>
+        <button class="btn btn-ghost btn-sm qr-only" onclick="SupplierPage.showQR('${s.id}')">QR</button>
         <button class="btn btn-ghost btn-sm" onclick="SupplierPage.showHistory('${s.id}')">납품이력</button>
         <button class="btn btn-ghost btn-sm" onclick="SupplierPage.showDocuments('${s.id}')">서류</button>
         <button class="btn btn-outline-primary btn-sm" onclick="SupplierPage.openEvalModal('${s.id}')">품질평가</button>
@@ -415,13 +415,13 @@ const SupplierPage = (() => {
           <div class="form-group">
             <label class="form-label">협력사 코드</label>
             <input type="text" class="form-input supplier-code-readonly" id="sup-code-preview" value="${escapeText(code)}" readonly>
-            <div class="form-hint">${s ? '기존 협력사 코드는 수정하지 않습니다' : '등록 시 자동 발급되고 QR 코드도 함께 생성됩니다'}</div>
+            <div class="form-hint">${s ? '기존 협력사 코드는 수정하지 않습니다' : (QR_ON ? '등록 시 자동 발급되고 QR 코드도 함께 생성됩니다' : '등록 시 자동 발급됩니다')}</div>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">거래품목</label>
           <input type="text" class="form-input" id="sup-main-item" value="${escapeText(s?.mainItem||'')}" placeholder="예) 옥수수, 첨가제">
-          <div class="form-hint">표시용 요약입니다 · 실제 QR 이력 연동은 아래 <b>납품 품목</b>에서 코드로 연결하세요</div>
+          <div class="form-hint">표시용 요약입니다 · 실제 ${QR_ON ? 'QR 이력' : '이력'} 연동은 아래 <b>납품 품목</b>에서 코드로 연결하세요</div>
         </div>
         <div class="form-group">
           <label class="form-label">납품 품목 (원료·제품코드 연동)</label>
@@ -431,7 +431,7 @@ const SupplierPage = (() => {
               oninput="SupplierPage.onMaterialSearch(this.value)" onblur="setTimeout(()=>SupplierPage.closeMaterialDropdown(),200)">
             <div class="autocomplete-dropdown hidden" id="sup-material-dropdown"></div>
           </div>
-          <div class="form-hint">이름만 입력하면 QR 이력관리가 안 될 수 있어요 · 마스터에서 실제 <b>원료코드 또는 제품코드</b>를 찾아 연결합니다 (여러 개 추가 가능)</div>
+          <div class="form-hint">이름만 입력하면 ${QR_ON ? 'QR 이력관리' : '이력관리'}가 안 될 수 있어요 · 마스터에서 실제 <b>원료코드 또는 제품코드</b>를 찾아 연결합니다 (여러 개 추가 가능)</div>
           <div id="sup-material-chips" class="supplier-material-chips"></div>
         </div>
         <div class="form-group">
@@ -757,7 +757,7 @@ const SupplierPage = (() => {
               hist.map(r => {
                 const w = DB.getWeighingByReceivingId(r.id);
                 return `<tr>
-                  <td><span class="td-mono text-xs">${escapeText(r.preRegId||r.id.slice(0,16))}</span></td>
+                  <td><span class="td-mono text-xs">${escapeText(recvNo(r).slice(0,16))}</span></td>
                   <td>${escapeText(r.materialName)}</td>
                   <td>${escapeText(r.vehicleNo||'-')}</td>
                   <td class="td-right">${formatNum(r.expectedWeight)}kg</td>
@@ -1235,7 +1235,7 @@ const SupplierPage = (() => {
         <div class="detail-hero">
           <div>
             <div class="detail-hero-name">${escapeText(s.name)}</div>
-            <div class="text-xs text-muted td-mono">${escapeText(s.code)} · ${escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code))}</div>
+            <div class="text-xs text-muted td-mono">${escapeText(s.code)}${QR_ON ? ' · ' + escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code)) : ''}</div>
           </div>
           <span class="badge ${s.haccpGrade==='A'?'badge-pass':s.haccpGrade==='B'?'badge-info':s.haccpGrade?'badge-warning':'badge-default'}">${escapeText(s.haccpGrade || s.status || '활성')}</span>
         </div>
@@ -1338,7 +1338,7 @@ const SupplierPage = (() => {
         <tr><th>사업자등록번호</th><td>${escapeText(s.businessNo || '-')}</td><th>업종</th><td>${escapeText(s.industry || '-')}</td></tr>
         <tr><th>연락처</th><td>${escapeText(s.contact || '-')}</td><th>이메일</th><td>${escapeText(s.email || '-')}</td></tr>
         <tr><th>국내/수입</th><td>${escapeText(s.domesticImport || '-')}</td><th>거래품목</th><td>${escapeText(s.mainItem || '-')}</td></tr>
-        <tr><th>QR 코드</th><td colspan="3">${escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code))}</td></tr>
+        ${QR_ON ? `<tr><th>QR 코드</th><td colspan="3">${escapeText(s.qrCode || DB.makeQRValue('SUPPLIER', s.code))}</td></tr>` : ''}
       </table>`;
 
     const matHtml = materials.length
@@ -1415,7 +1415,7 @@ const SupplierPage = (() => {
       </style></head><body>
       <div class="toolbar no-print"><button class="btn" onclick="window.print()">인쇄 / PDF 저장</button></div>
       <div class="head"><div><h1>협력사 전체정보</h1><div class="muted">${escapeText(s.name)} (${escapeText(s.code)})</div></div>
-        <div class="muted">출력일 ${printedAt}<br>우성사료 QR 이력관리</div></div>
+        <div class="muted">출력일 ${printedAt}<br>${QR_ON ? '우성사료 QR 이력관리' : '우성 품질관리 플랫폼'}</div></div>
       <h2>기본 정보</h2>${infoTable}
       <h2>납품 품목 (${materials.length})</h2>${matHtml}
       <h2>등록 서류 (${docs.length})</h2>${docHtml}

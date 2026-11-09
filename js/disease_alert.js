@@ -8,23 +8,14 @@ const DiseaseAlert = (() => {
   //   근거: 가축전염병예방법 제3조의2 — 농장명·소재지·발생일까지 공개된다.
   //   단, 농장명은 대부분 대표자 개인 이름이라 받지도 보여주지도 않는다(소재지·축종·두수만).
   const KAHIS_URL = 'https://www.kahis.go.kr/home/lkntscrinfo/selectLkntsOccrrncList.do';
-  const CACHE_KEY = 'ws_disease_alert_cache_v2';   // v2: 아이콘 제거 반영(구 캐시 무시)
+  // v3: 공식 표에 없는 질병을 '미표시'로 둔다(2026-11 럼피스킨이 표에서 빠짐). 예전 캐시는 쓰지 않는다.
+  const CACHE_KEY = 'ws_disease_alert_cache_v3';
+  try { localStorage.removeItem('ws_disease_alert_cache_v2'); } catch (_) {}
   // v1 캐시에는 농장명(대표자 개인 이름)이 들어 있어 버리고 v2 로 새로 쌓는다
   const OB_CACHE_KEY = 'ws_disease_outbreak_cache_v2';
   try { localStorage.removeItem('ws_disease_outbreak_cache_v1'); } catch (_) {}
   const REFRESH_MS = 10 * 60 * 1000;
   let timer = null;
-
-  const fallback = {
-    source: 'OFFICIAL_SNAPSHOT',
-    fetchedAt: '2026-06-30T00:00:00.000Z',
-    items: [
-      { id: 'ai', name: '조류 인플루엔자', shortName: 'AI', icon: '', level: '관심' },
-      { id: 'asf', name: '아프리카 돼지열병', shortName: 'ASF', icon: '', level: '심각' },
-      { id: 'fmd', name: '구제역', shortName: 'FMD', icon: '', level: '관심' },
-      { id: 'lsd', name: '럼피스킨', shortName: 'LSD', icon: '', level: '관심' }
-    ]
-  };
 
   const meta = {
     '조류인플루엔자': { id: 'ai', name: '조류 인플루엔자', shortName: 'AI', icon: '' },
@@ -34,6 +25,17 @@ const DiseaseAlert = (() => {
   };
 
   const levelOrder = { 관심: 1, 주의: 2, 심각: 3 };
+  const DISEASE_ORDER = ['ai', 'asf', 'fmd', 'lsd'];
+
+  // 표시용 4칸으로 맞춘다. 공식 표에 없는 질병은 단계를 지어내지 않고 빈 값으로 둔다.
+  const fillSlots = (items) => {
+    const list = Array.isArray(items) ? items : [];
+    return Object.values(meta)
+      .map(info => list.find(x => x.id === info.id) || { ...info, level: '' })
+      .sort((a, b) => DISEASE_ORDER.indexOf(a.id) - DISEASE_ORDER.indexOf(b.id));
+  };
+  // 단계를 한 번도 확인하지 못했을 때 — 과거 값을 박아 두면 틀린 단계가 현재값처럼 보인다
+  const unknownState = () => ({ source: 'NONE', fetchedAt: '', items: fillSlots([]) });
 
   const stripTags = (html) => String(html || '')
     .replace(/<br\s*\/?>/gi, '')
@@ -75,13 +77,8 @@ const DiseaseAlert = (() => {
       if (activeLevel) items.push({ ...info, level: activeLevel });
     }
 
-    if (items.length < 4) throw new Error('위기단계 표를 읽지 못했습니다.');
-    const order = ['ai', 'asf', 'fmd', 'lsd'];
-    return {
-      source: 'MAFRA',
-      fetchedAt: new Date().toISOString(),
-      items: order.map(id => items.find(item => item.id === id)).filter(Boolean)
-    };
+    if (!items.length) throw new Error('위기단계 표를 읽지 못했습니다.');
+    return { source: 'MAFRA', fetchedAt: new Date().toISOString(), items: fillSlots(items) };
   };
 
   // ── 발생현황: HTML 표 파싱 (서버 프록시가 없을 때 클라이언트에서 직접) ──
@@ -245,24 +242,38 @@ const DiseaseAlert = (() => {
         const payload = src.json ? JSON.parse(text) : parseOfficialHtml(text);
         if (src.json && payload.error) throw new Error(payload.error);
         if (!payload.items || !payload.items.length) throw new Error('빈 응답');
-        const normalized = { ...payload, fetchedAt: payload.fetchedAt || new Date().toISOString(), source: payload.source || 'MAFRA' };
+        const normalized = { ...payload, items: fillSlots(payload.items), fetchedAt: payload.fetchedAt || new Date().toISOString(), source: payload.source || 'MAFRA' };
+        // 서버가 공식 사이트를 못 읽어 지난 값을 돌려준 경우 — 실시간으로 표시하지 않는다
+        if (payload.stale) return { data: normalized, live: false, message: `공식 사이트 연결 실패 · 마지막 확인값${ageText(normalized.fetchedAt)}` };
         saveCache(normalized);
         return { data: normalized, live: true, message: '실시간 연결됨' };
       } catch (err) { /* 다음 소스 시도 */ }
     }
 
     const cached = loadCache();
-    if (cached?.items?.length) return { data: cached, live: false, message: '연결 지연 · 최근값 표시' };
-    return { data: fallback, live: false, message: '연결 지연 · 공식 확인값 표시' };
+    if (cached?.items?.length) {
+      return { data: { ...cached, items: fillSlots(cached.items) }, live: false,
+               message: `공식 사이트 연결 실패 · 마지막 확인값${ageText(cached.fetchedAt)}` };
+    }
+    return { data: unknownState(), live: false, message: '공식 사이트 연결 실패 · 현재 단계를 확인하지 못했습니다' };
   };
 
+  // 마지막 확인이 며칠 전인지 — 옛값을 현재값으로 착각하지 않게 함께 적는다
+  const ageText = (iso) => {
+    const d = new Date(iso || '');
+    if (isNaN(d)) return '';
+    const n = Math.floor((Date.now() - d.getTime()) / 86400000);
+    return n >= 1 ? `(${n}일 전)` : '';
+  };
+
+  // 확인된 단계 중 가장 높은 것. 하나도 없으면 빈 값.
   const highestLevel = (items) => items.reduce((top, item) =>
-    (levelOrder[item.level] || 0) > (levelOrder[top] || 0) ? item.level : top, '관심');
+    (levelOrder[item.level] || 0) > (levelOrder[top] || 0) ? item.level : top, '');
 
   const formatTime = (iso) => {
-    if (!iso) return '-';
+    if (!iso) return '';
     const d = new Date(iso);
-    if (isNaN(d)) return '-';
+    if (isNaN(d)) return '';
     return d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) + ' ' +
       d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   };
@@ -270,19 +281,20 @@ const DiseaseAlert = (() => {
   const levelClass = (level) => {
     if (level === '심각') return 'critical';
     if (level === '주의') return 'caution';
-    return 'watch';
+    if (level === '관심') return 'watch';
+    return 'unknown';
   };
 
   // 간소화 행: [아이콘 약칭] ─ [현재단계 pill] (한 줄, 작게)
   const renderRows = (items) => items.map(item => `
-    <div class="disease-row disease-${levelClass(item.level)}" title="${item.name} (${item.shortName})">
+    <div class="disease-row disease-${levelClass(item.level)}" title="${item.name} (${item.shortName})${item.level ? '' : ' · 공식 위기단계 표에 표시되지 않았습니다'}">
       <div class="disease-name">
         <div>
           <strong>${item.name}</strong>
           <span>${item.shortName}</span>
         </div>
       </div>
-      <span class="disease-cur ${levelClass(item.level)}">${item.level}</span>
+      <span class="disease-cur ${levelClass(item.level)}">${item.level || '미표시'}</span>
     </div>
   `).join('');
 
@@ -291,15 +303,17 @@ const DiseaseAlert = (() => {
     const metaEl = document.getElementById('disease-alert-meta');
     const badgeEl = document.getElementById('disease-alert-badge');
     if (!el) return;
-    const data = payload || fallback;
-    el.innerHTML = renderRows(data.items);
+    const data = payload || unknownState();
+    el.innerHTML = renderRows(fillSlots(data.items));
     if (badgeEl) {
       const high = highestLevel(data.items);
-      badgeEl.textContent = high === '심각' ? '심각 포함' : high === '주의' ? '주의 포함' : '전체 관심';
-      badgeEl.className = `disease-summary-badge ${levelClass(high)}`;
+      badgeEl.textContent = high === '심각' ? '심각 포함' : high === '주의' ? '주의 포함' : high === '관심' ? '전체 관심' : '확인 불가';
+      badgeEl.className = `disease-summary-badge ${state.live === false ? 'unknown' : levelClass(high)}`;
     }
     if (metaEl) {
-      metaEl.textContent = `${state.message || '공식 단계 표시'} · ${formatTime(data.fetchedAt)}`;
+      const when = formatTime(data.fetchedAt);
+      metaEl.textContent = `${state.message || '공식 단계 표시'}${when ? ` · ${when}` : ''}`;
+      metaEl.classList.toggle('stale', state.live === false);
     }
   };
 
@@ -332,7 +346,7 @@ const DiseaseAlert = (() => {
         </div>
       </div>
       <div class="disease-alert-body" id="disease-alert-body">
-        ${renderRows((loadCache() || fallback).items)}
+        ${renderRows(fillSlots((loadCache() || unknownState()).items))}
       </div>
       <div class="disease-outbreak" id="disease-outbreak">
         <span class="ob-label">최근 발생</span><span class="ob-empty">확인 중…</span>
