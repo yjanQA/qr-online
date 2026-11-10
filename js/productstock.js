@@ -40,7 +40,7 @@ const ProductStockPage = (() => {
                 <td class="td-right">${formatNum(r.produced)}</td>
                 <td class="td-right">${formatNum(r.shipped)}</td>
                 <td class="td-right font-bold" style="color:${r.remaining===0?'var(--text-muted)':'var(--success)'}">${formatNum(r.remaining)}</td>
-                <td><button class="btn btn-ghost btn-xs" onclick="App.navigate('history','${(r.fgLotNo||r.id)}')">추적</button></td>
+                <td><button class="btn btn-ghost btn-xs" onclick="App.navigate('productTrace','${(r.fgLotNo||r.id)}')">추적</button></td>
               </tr>`).join('')}</tbody>
           </table></div>
         </div>

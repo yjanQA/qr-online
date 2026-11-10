@@ -7,7 +7,7 @@ const App = (() => {
     qr:      { label: QR_ON ? '입고·재고 QR' : '입고·재고', defaultPage: 'dashboard' },
     quality: { label: '품질·실험실',  defaultPage: 'labDashboard' },
     formula: { label: '배합비·생산',  defaultPage: 'formula' },
-    trace:   { label: '추적·클레임',  defaultPage: 'history' },
+    trace:   { label: '추적·클레임',  defaultPage: 'productTrace' },
     admin:   { label: '관리',        defaultPage: 'supplier' },
     smart:   { label: '스마트제조',   defaultPage: 'ccp' },
     haccp:   { label: '인증관리',     defaultPage: 'haccpDocs' },
@@ -38,6 +38,8 @@ const App = (() => {
     feedProduction: { workspace:'formula', title: '배합사료 생산실적', subtitle: '', module: () => FeedProductionPage },
     formulaTrend: { workspace:'formula', title: '배합비 추이분석', subtitle: '배합비별 제품 스펙(화학·물리) 누적 추이', module: () => FormulaTrendPage },
     feedAppearance: { workspace:'formula', title: '외관·흐름성 시뮬레이터', subtitle: '배합비·공정조건 → 완제품 외관 · 빈 배출 거동(Mass/Funnel flow) 시각화', module: () => FeedAppearancePage },
+    productTrace:{ workspace:'trace',  title: '제품 추적관리',       subtitle: '제품·제조일자 → 생산 · 원료 투입 · 입고 · 분석 · VOC · 그날 공장 기록', module: () => ProductTracePage },
+    // 원료 추적(옛 화면) — 메뉴에서는 뺐고 QR 링크·입고건 바로가기로만 열린다(2026-11-10)
     history:    { workspace:'trace',   title: '원료 추적',           subtitle: '', module: () => HistoryPage   },
     voc:        { workspace:'trace',   title: 'VOC 역추적',          subtitle: '접수 · 처리내역(조치·근본원인·재발방지) · 역추적', module: () => VOCPage       },
     vocDashboard:{ workspace:'trace',  title: 'VOC 대시보드',        subtitle: '접수 추이 · 유형/원인 분포 · 재발방지 이력', module: () => VOCDashboardPage },
