@@ -274,6 +274,7 @@ const VOCPage = (() => {
                   <button class="btn btn-primary btn-sm" onclick="VOCPage.openHandle('${v.id}')">처리내역</button>
                   <button class="btn btn-outline-primary btn-sm" onclick="VOCPage.openDetail('${v.id}')">이력</button>
                   <button class="btn btn-ghost btn-sm" onclick="VOCPage.traceVOC('${v.id}')">역추적</button>
+                  ${(v.fgLotNo||v.productCode||v.productName)?`<button class="btn btn-ghost btn-sm" onclick="VOCPage.toProductTrace('${v.id}')" title="이 제품·제조일자의 생산·원료·분석·그날 기록">제품 추적관리</button>`:''}
                   <button class="btn btn-ghost btn-sm" onclick="VOCPage.aiReport('${v.id}')" style="color:var(--ai-accent-light)">원인분석</button>
                   <button class="btn btn-ghost btn-sm" onclick="VOCPage.toAgenda('${v.id}')">회의 안건</button>
                   ${v.status!=='CLOSED'?`<button class="btn btn-ghost btn-xs" onclick="VOCPage.updateStatus('${v.id}','CLOSED')">종결</button>`
@@ -520,6 +521,13 @@ const VOCPage = (() => {
     App.toast('VOC 등록 완료', 'success');
     App.updateBadges();
     App.refreshPage();
+  };
+
+  // 제품 추적관리로: 제품LOT > 제품코드 > 제품명 순으로 넘기고 제조일자를 함께 준다
+  const toProductTrace = (vocId) => {
+    const v = DB.getVOCById(vocId);
+    if (!v) return;
+    App.navigate('productTrace', v.fgLotNo || v.productCode || v.productName || '', DB.vocMfgDate(v) || '');
   };
 
   // ── 핵심: VOC 역추적 ──
@@ -1101,5 +1109,5 @@ const VOCPage = (() => {
   return { render, afterRender, prefill, prefillProductCode: prefillProductCodeFn, openAddModal, submitVOC, traceVOC, updateStatus, closeModal, aiReport, aiDeep,
     findLotByMfg, pickLot, setMfgFromTrace, linkLot,
     onPhotosSelected, removePhoto, onActionPhotos, removeActionPhoto, viewPhoto, addPhotosTo, deletePhotoFrom,
-    setFilter, setSearch, showMore, syncDue, openHandle, saveHandle, openDetail, toAgenda };
+    setFilter, setSearch, showMore, syncDue, openHandle, saveHandle, openDetail, toAgenda, toProductTrace };
 })();

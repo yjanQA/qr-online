@@ -10,7 +10,7 @@
 // ============================================================
 
 const ProductTracePage = (() => {
-  const st = { q: '', key: '', date: '', openLot: '' };
+  const st = { q: '', key: '', date: '', openLot: '', pendDate: '' };   // pendDate: VOC 에서 넘어와 제품을 고르면 열 제조일자
   const FACTORY_NAMES = { NS: '논산', GS: '경산', AS: '아산', HQ: '본사' };
   const ANALYSIS_AFTER_DAYS = 3;          // 제조일 뒤 며칠 안의 분석을 그날 제품 분석으로 본다
   const weatherCache = {};
@@ -85,7 +85,7 @@ const ProductTracePage = (() => {
     const pn = norm(p.name);
     const out = [];
     safe(() => DB.getVOCs(), []).forEach(v => {
-      if (factory() && v.factory !== factory()) return;
+      // VOC 의 공장은 접수 부서(본사 등)라 생산 공장과 다를 수 있어 공장으로 거르지 않는다(voc.js traceVOC 와 같은 기준)
       if (sameProduct(p, v.productCode, v.productName)) { out.push({ v, loose: false }); return; }
       if (p.code && v.productCode) return;               // 둘 다 코드가 있는데 다르면 다른 제품
       const vn = norm(v.productName);
@@ -128,9 +128,9 @@ const ProductTracePage = (() => {
         <b>${h(p.name || '-')}</b> <span class="text-muted mono" style="font-size:11px">${h(p.code)}</span>
         <span class="text-muted" style="float:right;font-size:11px">${h(srcText(p))}</span></div>`).join('');
   };
-  const pick = (key) => { st.key = key; st.date = ''; st.openLot = ''; st.q = current()?.name || ''; App.refreshPage(); };
+  const pick = (key) => { st.key = key; st.date = st.pendDate || ''; st.pendDate = ''; st.openLot = ''; st.q = current()?.name || ''; App.refreshPage(); };
   const setDate = (d) => { st.date = d; st.openLot = ''; App.refreshPage(); };
-  const clear = () => { st.key = ''; st.date = ''; st.q = ''; App.refreshPage(); };
+  const clear = () => { st.key = ''; st.date = ''; st.q = ''; st.pendDate = ''; App.refreshPage(); };
   const toggleLot = (k) => { st.openLot = st.openLot === k ? '' : k; App.refreshPage(); };
 
   // ── 화면 조각 ──
@@ -313,7 +313,7 @@ const ProductTracePage = (() => {
         <td><button class="btn btn-ghost btn-xs" onclick="VOCPage.openDetail('${jsq(v.id)}')">이력</button></td></tr>`;
     const head = ['접수일', '제품명(VOC)', '유형', '내용', '조치', '상태', ''];
     const sub = `이 제품 VOC ${exact.length}건${loose.length ? ` · 이름이 비슷한 VOC ${loose.length}건` : ''}${noDate ? ` · 제조일자 미기재 ${noDate}건` : ''}`;
-    const body = (hit.length ? table(head, hit.map(rowOf)) : empty('이 제조일자로 접수된 VOC 가 없습니다.'))
+    const body = (hit.length ? table(head, hit.map(rowOf)) : near.length ? '' : empty('이 제조일자로 접수된 VOC 가 없습니다.'))
       + (near.length ? `<div style="font-size:12.5px;font-weight:700;margin:12px 0 4px">이름이 비슷한 VOC ${near.length}건</div>
           <div class="text-muted" style="font-size:12px;margin-bottom:6px">VOC 대장에는 제품명이 브랜드까지만 적힌 경우가 많아(예: 스마일독) 이 제품이 맞는지 확인이 필요합니다.</div>`
           + table(head, near.map(rowOf)) : '');
@@ -396,9 +396,18 @@ const ProductTracePage = (() => {
       const ix = productIndex();
       const hit = lot ? [...ix.values()].find(p => sameProduct(p, lot.productCode, lot.productName))
         : (ix.get('C:' + code) || [...ix.values()].find(p => norm(p.name) === norm(code)));
-      if (hit) { st.key = hit.key; st.q = hit.name; st.date = lot ? day(lot.productionDate) : (date || ''); st.openLot = ''; }
+      // VOC 대장에만 있는 브랜드 이름(예: 스마일독)이면 그 이름이 들어간 실제 제품을 고르게 한다
+      const vocOnly = hit && !lot && hit.src.size === 1 && hit.src.has('voc') && suggest(code).some(x => x.key !== hit.key);
+      if (hit && !vocOnly) { st.key = hit.key; st.q = hit.name; st.date = lot ? day(lot.productionDate) : (date || ''); st.pendDate = ''; st.openLot = ''; }
+      else { st.key = ''; st.q = String(code); st.date = ''; st.pendDate = date || ''; st.openLot = ''; }
     }
     const p = current();
+    const cands = !p && st.q ? suggest(st.q) : [];
+    const candCard = cands.length ? `<div class="card" style="padding:14px 16px">
+        <div style="font-weight:700;margin-bottom:4px">'${h(st.q)}' 이(가) 들어간 제품 ${cands.length}개</div>
+        <div class="text-muted" style="font-size:12px;margin-bottom:10px">VOC 대장의 제품명이 브랜드까지만 적혀 있어 제품을 하나로 정할 수 없습니다. 해당 제품을 고르세요.${st.pendDate ? ` 고르면 VOC 제조일자 ${h(st.pendDate)} 로 바로 열립니다.` : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${cands.map(c => `<button class="btn btn-ghost btn-sm" onclick="ProductTracePage.pick('${jsq(c.key)}')">${h(c.name || '-')} <span class="text-muted mono" style="font-size:11px">${h(c.code)}</span> <span class="text-muted" style="font-size:11px">· ${h(srcText(c))}</span></button>`).join('')}</div>
+      </div>` : '';
     return `<style>
         .pt-suggest{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--bg-card,#fff);border:1px solid var(--border);border-radius:6px;max-height:320px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.12)}
         .pt-sug{padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)}
@@ -406,7 +415,7 @@ const ProductTracePage = (() => {
         .pt-t td{white-space:nowrap}
       </style>
       ${searchCard()}
-      ${!p ? `<div class="card text-muted" style="text-align:center;padding:40px">제품명이나 제품코드를 입력해 제품을 고르세요. 제조일자를 누르면 그 제품·그날의 생산, 원료 투입, 분석, VOC, 공장 기록이 한 화면에 나옵니다.</div>` : `
+      ${!p && candCard ? candCard : !p ? `<div class="card text-muted" style="text-align:center;padding:40px">제품명이나 제품코드를 입력해 제품을 고르세요. 제조일자를 누르면 그 제품·그날의 생산, 원료 투입, 분석, VOC, 공장 기록이 한 화면에 나옵니다.</div>` : `
         ${datesCard(p)}
         ${st.date ? `${productionCard(p, st.date)}${analysisCard(p, st.date)}${vocCard(p, st.date)}${dayCard(p, st.date)}`
           : '<div class="card text-muted" style="text-align:center;padding:30px">위에서 제조일자를 누르거나 날짜를 직접 고르세요.</div>'}`}`;
