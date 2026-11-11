@@ -15,7 +15,27 @@ const DiseasePage = (() => {
   const KAHIS_URL = 'https://home.kahis.go.kr/home/lkntscrinfo/selectLkntsOccrrncList.do';
   const CACHE_KEY = 'ws_disease_history_v1';
   const PRESETS = [['30d', '최근 30일', 30], ['90d', '90일', 90], ['1y', '1년', 365], ['3y', '3년', 365 * 3], ['5y', '5년', 365 * 5]];
-  const RADII = [20, 30, 50];
+  // 3km = 보호지역 바깥 경계, 10km = 예찰지역 바깥 경계(구제역·AI·ASF 방역실시요령 제2조), 30·50km = 내부 감시
+  const RADII = [3, 10, 30, 50];
+  const LEGAL_RADII = { 3: '보호지역', 10: '예찰지역' };
+  // 공장 둘레 방역지역(추정)과 사료공장 조치 — 각 방역실시요령 고시 조항
+  const ZONE_RULES = [
+    { re: /조류인플루엔자/, law: '조류인플루엔자 방역실시요령(고시 제2026-25호)', zones: {
+      관리: '사료공장의 원료·사료 이동제한, 바이러스 양성 등은 폐기 (제22조제3항제10호)',
+      보호: '사료공장의 원료·사료 이동제한, 위험도 평가 후 가축방역관 지도·감독하 생산·유통 허용, 가금용 사료는 검역본부 점검 후 허용 (제22조제3항제11호)',
+      예찰: '사료공장은 가축방역관 지도·감독하 생산·유통 (제23조제3항제9호)' } },
+    { re: /구제역/, law: '구제역 방역실시요령(고시 제2024-5호)', zones: {
+      관리: '관리지역 내 우제류농장 사료공급은 지정 차량 이용 (제20조의2제4항)',
+      보호: '보호지역 내 우제류농장 사료공급은 시장·군수·구청장 지정 차량 고정 배차 (제20조의3제4항제5호)',
+      예찰: '예찰지역은 정기 백신접종 미실시 유형 발생 때 설정 (제2조제5호)' } },
+    { re: /아프리카돼지열병/, law: '아프리카돼지열병 방역실시요령(고시 제2026-23호)', zones: {
+      관리: '사료공장·사료 환적장의 사료는 시장·군수 지정 차량만 소독 후 운반 (제21조제4항제7호)',
+      보호: '사료공장·사료 환적장의 사료는 시장·군수 지정 차량만 소독 후 운반 (제21조제4항제7호)',
+      예찰: '사료·가축분뇨를 예찰지역 밖으로 반출할 때 소독 (제22조제4항제6호)' } },
+  ];
+  const ZONE_RANGE = { 관리: '반경 500m 이내', 보호: '500m~3km', 예찰: '3km 초과~10km' };
+  const zoneOf = (d) => (d <= 0.5 ? '관리' : d <= 3 ? '보호' : d <= 10 ? '예찰' : '');
+  const ZONE_DAYS = 30;                    // 발생 뒤 이 기간 안이고 종식일이 없으면 방역지역이 살아 있다고 본다(추정)
   const RECENT_DAYS = 14;                  // 지도에서 '최근 발생' 테두리를 긋는 기준
   // 옛 광역시도 이름 → 지도 이름(2026 기준)
   const OLD_SIDO = { '강원도': '강원특별자치도', '전라북도': '전북특별자치도', '전라남도': '전남광주통합특별시',
@@ -27,7 +47,7 @@ const DiseasePage = (() => {
   const st = {
     preset: '1y', from: '', to: '',
     disease: '', species: '', grade: '', sido: '', region: '',
-    radius: 30,
+    radius: 10,
     data: null, loading: false, error: '', note: '',
   };
   let chart = null;
@@ -82,15 +102,60 @@ const DiseasePage = (() => {
   const loadMap = () => {
     if (window.KOREA_MAP) { mapReady = true; return Promise.resolve(); }
     if (mapLoading) return mapLoading;
-    mapLoading = new Promise((resolve) => {
+    const add = (src) => new Promise((resolve) => {
       const s = document.createElement('script');
-      s.src = 'data/koreaMap.js?v=20261109';
-      s.onload = () => { mapReady = !!window.KOREA_MAP; resolve(); };
-      s.onerror = () => resolve();
+      s.src = src;
+      s.onload = s.onerror = () => resolve();
       document.head.appendChild(s);
     });
+    mapLoading = Promise.all([
+      add('data/koreaMap.js?v=20261109'),
+      window.KOREA_EMD ? null : add('data/koreaEmd.js?v=20261111'),   // 읍면동 중심점 — 없으면 시군구 중심으로 잰다
+    ]).then(() => { mapReady = !!window.KOREA_MAP; });
     return mapLoading;
   };
+  // 발생지 위치: 읍면동 중심점, 이름이 안 맞으면 시군구 중심점
+  const locCache = new Map();
+  const emdPick = (tbl, name) => {
+    if (!tbl) return null;
+    if (tbl[name]) return [name, tbl[name]];
+    const stem = name.replace(/[읍면동]$/, '');
+    if (stem.length < 2) return null;
+    const ks = Object.keys(tbl);
+    // 면→읍 승격, 법정동 → 행정동(신촌동 → 신촌1동·신촌제1동)
+    const k = ks.find(x => x.replace(/[읍면]$/, '') === stem && /[읍면]$/.test(name))
+      || ks.find(x => x.startsWith(stem) && /^(제)?\d+(\.\d+)?[가]?동$/.test(x.slice(stem.length)));
+    return k ? [k, tbl[k]] : null;
+  };
+  const locOf = (region) => {
+    if (locCache.has(region)) return locCache.get(region);
+    const k = regionKey(region);
+    const g = regionIndex()[k.key];
+    let out = g ? { ll: g.ll, lvl: 'sgg', label: k.key } : null;
+    const E = window.KOREA_EMD;
+    if (E) {
+      const t = String(region || '').trim().split(/\s+/);
+      let i = k.sgg ? 2 : 1;
+      if (k.sgg && /시$/.test(k.sgg) && /구$/.test(t[i] || '')) i++;   // 수원시 장안구 ○○동
+      const name = t[i] || '';
+      if (name && /[읍면동가]$/.test(name)) {
+        let hit = emdPick(E[k.key], name);
+        if (!hit) {          // 시군구 이름이 바뀐 경우(인천 2026 개편 등): 같은 시도 안에서 이름이 하나만 맞으면 쓴다
+          const c = Object.keys(E).filter(x => x === k.sido || x.startsWith(k.sido + ' ')).map(x => emdPick(E[x], name)).filter(Boolean);
+          if (c.length === 1) hit = c[0];
+        }
+        if (hit) out = { ll: hit[1], lvl: 'emd', label: `${k.key} ${hit[0]}` };
+      }
+    }
+    if (out || window.KOREA_EMD) locCache.set(region, out);
+    return out;
+  };
+  // 공장별 방역지역 추정: 최근 ZONE_DAYS일·종식 전 발생 중 반경 10km 안
+  const zoneHits = (rows, f) => rows
+    .filter(r => !r.endedAt && daysAgo(r.occurredAt) <= ZONE_DAYS)
+    .map(r => ({ r, loc: locOf(r.region) })).filter(x => x.loc)
+    .map(x => ({ ...x, d: km(f.ll, x.loc.ll) })).filter(x => x.d <= 10)
+    .sort((a, b) => a.d - b.d);
   const regionIndex = () => {
     const m = window.KOREA_MAP;
     if (!m) return {};
@@ -288,11 +353,10 @@ const DiseasePage = (() => {
     const regions = new Set(rows.map(r => regionKey(r.region).key));
     const recent = rows.filter(r => daysAgo(r.occurredAt) <= RECENT_DAYS).length;
     const last = rows[0];
-    const idx = regionIndex();
     const fs = factories();
     const near = rows.filter(r => {
-      const g = idx[regionKey(r.region).key];
-      return g && daysAgo(r.occurredAt) <= 30 && fs.some(f => km(f.ll, g.ll) <= st.radius);
+      const loc = locOf(r.region);
+      return loc && daysAgo(r.occurredAt) <= 30 && fs.some(f => km(f.ll, loc.ll) <= st.radius);
     }).length;
     const card = (label, value, sub, color) => `<div class="kpi-card" style="--kpi-color:${color};cursor:default">
         <div class="kpi-label" style="text-transform:none">${label}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div>`;
@@ -300,7 +364,7 @@ const DiseasePage = (() => {
       ${card('발생 건수', rows.length.toLocaleString(), `${range().join(' ~ ')}`, 'var(--accent)')}
       ${card('발생 시군구', regions.size, '지도에 칠해진 시군구', 'var(--warning)')}
       ${card(`최근 ${RECENT_DAYS}일 발생 건수`, recent, `${recentSpan(RECENT_DAYS)}${last ? ` · 마지막 ${h(md(last.occurredAt))} ${h(diseaseName(last.disease))}` : ''}`, recent ? 'var(--danger)' : 'var(--success)')}
-      ${card(`공장 ${st.radius}km 안 발생 건수 (최근 30일)`, near, `${recentSpan(30)} · 시군구 중심 기준 · 두 공장 반경에 겹치면 1건으로`, near ? 'var(--danger)' : 'var(--success)')}
+      ${card(`공장 ${st.radius}km 안 발생 건수 (최근 30일)`, near, `${recentSpan(30)}${LEGAL_RADII[st.radius] ? ` · ${LEGAL_RADII[st.radius]} 경계` : ' · 내부 감시 반경'} · 읍면 중심 기준 · 두 공장 반경에 겹치면 1건으로`, near ? 'var(--danger)' : 'var(--success)')}
     </div>`;
   };
 
@@ -309,6 +373,15 @@ const DiseasePage = (() => {
     let i = 0;
     while (i < STEPS.length && n >= STEPS[i]) i++;
     return COLORS[Math.max(0, i - 1)];
+  };
+
+  // 고른 시군구용: 같은 단계의 더 진한 색
+  const SEL_COLORS = ['#ef6548', '#cb181d', '#99000d', '#4a0806'];
+  const selColorOf = (n) => {
+    if (!n) return '#9aa0a8';
+    let i = 0;
+    while (i < STEPS.length && n >= STEPS[i]) i++;
+    return SEL_COLORS[Math.max(0, i - 1)];
   };
 
   const mapSvg = (rows) => {
@@ -321,12 +394,15 @@ const DiseasePage = (() => {
       if (daysAgo(r.occurredAt) <= RECENT_DAYS) recent[k] = true;
     });
     const sel = st.region;
-    const paths = m.regions.map(r => {
+    // 고른 시군구는 한 단계 진한 색 + 굵은 검은 테두리로, 다른 시군구 위에 그린다. 나머지는 살짝 옅게.
+    const paths = m.regions.filter(r => r.k !== sel).map(r => {
       const n = cnt[r.k] || 0;
-      const isSel = sel === r.k;
-      const stroke = isSel ? '#171A20' : recent[r.k] ? '#7a120e' : '#ffffff';
-      const sw = isSel ? 1.6 : recent[r.k] ? 1.1 : 0.4;
-      return `<path d="${r.d}" fill="${colorOf(n)}" stroke="${stroke}" stroke-width="${sw}" data-k="${h(r.k)}" data-n="${n}" style="cursor:pointer"></path>`;
+      const stroke = recent[r.k] ? '#7a120e' : '#ffffff';
+      const sw = recent[r.k] ? 1.1 : 0.4;
+      return `<path d="${r.d}" fill="${colorOf(n)}" stroke="${stroke}" stroke-width="${sw}" data-k="${h(r.k)}" data-n="${n}" style="cursor:pointer"${sel ? ' fill-opacity="0.55"' : ''}></path>`;
+    }).join('') + m.regions.filter(r => r.k === sel).map(r => {
+      const n = cnt[r.k] || 0;
+      return `<path d="${r.d}" fill="${selColorOf(n)}" stroke="#171A20" stroke-width="2.4" stroke-linejoin="round" data-k="${h(r.k)}" data-n="${n}" style="cursor:pointer"></path>`;
     }).join('');
     const pxPerKm = m.proj.ky / 111.0;
     const fac = factories().map(f => {
@@ -342,7 +418,7 @@ const DiseasePage = (() => {
     const labels = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => {
       const g = regionIndex()[k];
       if (!g) return '';
-      return `<text x="${g.c[0]}" y="${g.c[1] + 3}" text-anchor="middle" font-size="9.5" font-weight="700" fill="${n >= 10 ? '#fff' : '#171A20'}" pointer-events="none">${n}</text>`;
+      return `<text x="${g.c[0]}" y="${g.c[1] + 3}" text-anchor="middle" font-size="9.5" font-weight="700" fill="${n >= 10 || k === st.region ? '#fff' : '#171A20'}" pointer-events="none">${n}</text>`;
     }).join('');
     return `<svg id="dz-map" viewBox="0 0 ${m.w} ${m.h}" style="width:100%;max-height:640px;display:block" xmlns="http://www.w3.org/2000/svg">
         <g id="dz-regions">${paths}</g>
@@ -374,30 +450,45 @@ const DiseasePage = (() => {
       </div>`).join('');
   };
 
+  const kmText = (d) => (d < 20 ? d.toFixed(1) : String(Math.round(d)));
   const nearCard = (rows) => {
-    const idx = regionIndex();
-    const radBtns = RADII.map(r => `<button class="btn btn-xs ${st.radius === r ? 'btn-primary' : 'btn-ghost'}" onclick="DiseasePage.setRadius(${r})">${r}km</button>`).join('');
+    const radBtns = RADII.map(r => `<button class="btn btn-xs ${st.radius === r ? 'btn-primary' : 'btn-ghost'}" onclick="DiseasePage.setRadius(${r})" title="${LEGAL_RADII[r] ? `${LEGAL_RADII[r]} 바깥 경계(방역실시요령 제2조)` : '내부 감시 반경'}">${r}km${LEGAL_RADII[r] ? ` ${LEGAL_RADII[r]}` : ''}</button>`).join('');
+    let emdN = 0, sggN = 0;
+    rows.forEach(r => { const l = locOf(r.region); if (l) { if (l.lvl === 'emd') emdN++; else sggN++; } });
     const body = factories().map(f => {
-      const hits = rows.map(r => ({ r, g: idx[regionKey(r.region).key] }))
-        .filter(x => x.g).map(x => ({ ...x, d: km(f.ll, x.g.ll) }));
+      const hits = rows.map(r => ({ r, loc: locOf(r.region) }))
+        .filter(x => x.loc).map(x => ({ ...x, d: km(f.ll, x.loc.ll) }));
       const inR = hits.filter(x => x.d <= st.radius);
       const in30 = inR.filter(x => daysAgo(x.r.occurredAt) <= 30);
       const nearest = hits.filter(x => daysAgo(x.r.occurredAt) <= 30).sort((a, b) => a.d - b.d)[0];
-      const tone = in30.length ? 'var(--danger)' : inR.length ? 'var(--warning)' : 'var(--success)';
+      const zh = zoneHits(rows, f);
+      const tone = zh.length || in30.length ? 'var(--danger)' : inR.length ? 'var(--warning)' : 'var(--success)';
       const top = countBy(inR.map(x => x.r), r => diseaseName(r.disease)).map(([k, n]) => `${h(k)} ${n}`).join(' · ');
+      const where = (x) => `${h(x.loc.label)}${x.loc.lvl === 'sgg' ? ' (시군구 중심)' : ''}`;
+      // 질병마다 가장 가까운 발생 하나로 방역지역을 추정한다
+      const seen = new Set();
+      const zoneLines = zh.filter(x => { const k = diseaseName(x.r.disease); if (seen.has(k)) return false; seen.add(k); return true; }).map(x => {
+        const dz = diseaseName(x.r.disease), z = zoneOf(x.d), rule = ZONE_RULES.find(R => R.re.test(dz));
+        return `<div style="margin-top:6px;padding:7px 9px;background:var(--danger-bg);border-radius:4px;font-size:12px;line-height:1.5">
+          <b style="color:var(--danger)">${h(dz)} ${z}지역(${ZONE_RANGE[z]}) 해당 가능</b> · ${where(x)} 약 ${kmText(x.d)}km · 발생 ${h(x.r.occurredAt)}
+          <div>${rule ? `${h(rule.zones[z])}<span class="text-muted"> — ${h(rule.law)}</span>` : '<span class="text-muted">이 질병은 방역실시요령 고시가 없습니다. 긴급행동지침(SOP)과 시군 공고로 방역대를 확인합니다.</span>'}</div></div>`;
+      }).join('');
       return `<div style="border:1px solid var(--border);border-left:3px solid ${tone};border-radius:4px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <b>${h(f.name)}</b><span class="mono" style="color:${tone};font-weight:700">${in30.length}<span style="font-size:11px;font-weight:400;color:var(--text-muted)"> 건 / 최근 30일</span></span></div>
+          <b>${h(f.name)}</b><span class="mono" style="color:${tone};font-weight:700">${in30.length}<span style="font-size:11px;font-weight:400;color:var(--text-muted)"> 건 / ${st.radius}km · 최근 30일</span></span></div>
         <div class="text-muted" style="font-size:12px;margin-top:4px">조회 기간 전체 반경 안 ${inR.length}건${top ? ' — ' + top : ''}</div>
         <div style="font-size:12px;margin-top:4px">${nearest
-          ? `30일 내 가장 가까운 발생: <b>${h(nearest.g.k)}</b> 약 ${Math.round(nearest.d)}km · ${h(diseaseName(nearest.r.disease))} · ${h(nearest.r.occurredAt)}`
+          ? `30일 내 가장 가까운 발생: <b>${where(nearest)}</b> 약 ${kmText(nearest.d)}km · ${h(diseaseName(nearest.r.disease))} · ${h(nearest.r.occurredAt)}`
           : '<span class="text-muted">30일 내 발생 없음</span>'}</div>
+        ${zoneLines || `<div style="font-size:12px;margin-top:4px;color:var(--success)">방역지역(10km) 안 진행 중 발생 없음</div>`}
       </div>`;
     }).join('');
     return `<div class="card" style="margin:0">
-      <div class="card-head"><div class="card-title">공장 인근 발생</div><div style="display:flex;gap:4px">${radBtns}</div></div>
+      <div class="card-head"><div class="card-title">공장 인근 발생</div><div style="display:flex;gap:4px;flex-wrap:wrap">${radBtns}</div></div>
       <div style="display:grid;gap:8px">${body}</div>
-      <div class="text-muted" style="font-size:11px;margin-top:8px">거리는 발생 시군구의 중심점과 공장 사이 직선거리입니다. 농장 위치는 공개되지 않습니다.</div>
+      <div class="text-muted" style="font-size:11px;margin-top:8px;line-height:1.55">
+        방역지역 반경: 관리지역 500m 이내 · 보호지역 500m~3km · 예찰지역 3km 초과~10km (구제역·조류인플루엔자·아프리카돼지열병 방역실시요령 제2조). 시장·군수가 지역 여건에 따라 넓히거나 좁힐 수 있습니다.<br>
+        거리는 발생 읍면동 중심점과 공장 사이 직선거리이고, 읍면 이름이 안 맞으면 시군구 중심점으로 잽니다(조회 기간 읍면 기준 ${emdN}건 · 시군구 기준 ${sggN}건). 농장 위치는 공개되지 않으므로 방역지역 해당 여부는 추정이며, 발생 ${ZONE_DAYS}일 안·종식 전 건만 봅니다. 실제 적용은 해당 시군 공고로 확인합니다.</div>
     </div>`;
   };
 
@@ -485,7 +576,7 @@ const DiseasePage = (() => {
           <div id="dz-tip" style="position:absolute;display:none;pointer-events:none;background:#171A20;color:#fff;font-size:12px;padding:6px 9px;border-radius:4px;max-width:240px;z-index:5"></div>
         </div>
         <div style="display:grid;gap:14px;align-content:start">
-          ${nearCard(rows)}
+          ${nearCard(mapRows)}
           <div class="card" style="margin:0">
             <div class="card-head"><div class="card-title">시도별 발생</div></div>
             ${sidoBars(filtered('place'))}
